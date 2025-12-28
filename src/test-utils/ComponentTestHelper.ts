@@ -7,6 +7,67 @@
 import { FSComponent, DisplayComponent, VNode } from '@microsoft/msfs-sdk';
 import { TestEnvironment } from './TestEnvironment';
 
+/**
+ * Recursively matches VNodes to actual DOM nodes and fixes Ref pointers.
+ * This effectively "heals" the disconnect caused by cloning/rebuilding.
+ * 
+ * This solves the "Ghost Reference" problem where refs point to initial
+ * VNode instances instead of the final DOM nodes in the container.
+ */
+function reconcileRefs(vnode: any, domNode: Node | null): void {
+  if (!vnode || !domNode) return;
+
+  // 1. If this VNode has a ref, FORCE it to point to the real DOM node
+  if (vnode.props?.ref && typeof vnode.props.ref === 'object' && 'instance' in vnode.props.ref) {
+    // This is the magic fix: overwrite the stale instance with the real one
+    vnode.props.ref.instance = domNode;
+  }
+
+  // 2. If this VNode tracks an internal instance, update that too (optional but safe)
+  if (vnode.instance) {
+    vnode.instance = domNode;
+  }
+
+  // 3. Recurse through children
+  // We must handle cases where VNodes have children but the DOM might have extra text/comment nodes
+  if (vnode.children && Array.isArray(vnode.children) && vnode.children.length > 0 && domNode instanceof Element) {
+    
+    // Get real DOM element children
+    // Filter to skip pure whitespace text nodes if VNode tree doesn't track them
+    const domChildren = Array.from(domNode.childNodes).filter(node => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        // Keep text nodes only if they have non-whitespace content
+        return node.textContent?.trim().length! > 0;
+      }
+      // Keep all element nodes
+      return true;
+    });
+
+    let domIndex = 0;
+    
+    for (const childVNode of vnode.children) {
+      if (!childVNode) continue;
+
+      // Skip non-VNode children (strings, numbers, nulls)
+      if (typeof childVNode !== 'object') {
+        // For text nodes, we might need to advance domIndex
+        // But typically text VNodes are handled differently
+        continue;
+      }
+
+      // Ensure we don't run out of DOM nodes
+      if (domIndex >= domChildren.length) break;
+
+      const currentDom = domChildren[domIndex];
+
+      // Recursively fix the child
+      reconcileRefs(childVNode, currentDom);
+
+      domIndex++;
+    }
+  }
+}
+
 export class ComponentTestHelper {
   private env: TestEnvironment;
   private container: HTMLElement;
@@ -49,8 +110,14 @@ export class ComponentTestHelper {
       throw new Error('Component did not render any DOM element to container');
     }
 
-    // Call onAfterRender AFTER the VNode is in the DOM and refs are populated
+    // FIX: Reconcile the Refs!
+    // We match the VNode tree (which holds the user's refs) to the Container's first child
+    // This "heals" the disconnect caused by cloning/rebuilding during render
+    reconcileRefs(vnode, element);
+
+    // Call onAfterRender AFTER the VNode is in the DOM and refs are populated AND reconciled
     // This matches the MSFS SDK lifecycle - onAfterRender is called after render is complete
+    // Now when onAfterRender runs, all refs (including child refs) point to the correct DOM nodes!
     if (component.onAfterRender) {
       component.onAfterRender(vnode);
     }
