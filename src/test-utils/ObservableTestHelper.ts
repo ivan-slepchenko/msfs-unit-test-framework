@@ -18,15 +18,21 @@ export class ObservableTestHelper {
     timeout: number = 1000
   ): Promise<T> {
     return new Promise((resolve, reject) => {
-      const subscription = observable.sub((value) => {
+      let subscription: { destroy: () => void } | null = null;
+      
+      subscription = observable.sub((value) => {
         if (!predicate || predicate(value)) {
-          subscription.destroy();
+          if (subscription) {
+            subscription.destroy();
+          }
           resolve(value);
         }
       }, true);
 
       setTimeout(() => {
-        subscription.destroy();
+        if (subscription) {
+          subscription.destroy();
+        }
         reject(new Error(`Timeout waiting for observable value (${timeout}ms)`));
       }, timeout);
     });
