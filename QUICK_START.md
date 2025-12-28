@@ -83,3 +83,5 @@ describe('MyComponent Tests', () => {
 - Изучите API в `src/index.ts`
 
 
+
+

@@ -2,9 +2,18 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
-    "types": ["node", "jest"]
+    "types": ["node", "jest"],
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "jsx": "react",
+    "jsxFactory": "FSComponent.buildComponent",
+    "jsxFragmentFactory": "FSComponent.Fragment",
+    "paths": {
+      "@microsoft/msfs-sdk": ["src/mocks/SDKAdapter"],
+      "@microsoft/msfs-types": ["../node_modules/@microsoft/msfs-types"]
+    }
   },
-  "include": ["tests/**/*", "src/**/*"],
+  "include": ["tests/**/*", "src/**/*", "../html_ui/stormscope/**/*", "src/mocks/jsx.d.ts"],
   "exclude": ["node_modules", "dist"]
 }
 

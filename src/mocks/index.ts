@@ -6,5 +6,7 @@
 
 export * from './SimVarMock';
 export * from './CoherentMock';
+export * from './SDKAdapter';
+export * from './MSFSGlobals';
 
 
