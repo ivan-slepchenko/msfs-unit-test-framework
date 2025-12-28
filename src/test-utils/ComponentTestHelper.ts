@@ -7,20 +7,52 @@
 import { FSComponent, DisplayComponent, VNode } from '@microsoft/msfs-sdk';
 import { TestEnvironment } from './TestEnvironment';
 
+
 /**
  * Recursively matches VNodes to actual DOM nodes and fixes Ref pointers.
- * This effectively "heals" the disconnect caused by cloning/rebuilding.
+ * This effectively "heals" the disconnect caused by cloning/rebuilding during render.
  * 
  * This solves the "Ghost Reference" problem where refs point to initial
  * VNode instances instead of the final DOM nodes in the container.
+ * 
+ * This is Phase 2 of the ref reconciliation process. Phase 1 (direct DOM queries)
+ * handles most cases efficiently. This function provides a fallback for complex
+ * nested structures where position-based or attribute-based matching is needed.
+ * 
+ * Matching strategies (in order of preference):
+ * 1. Position-based matching by tag name (fast, works for simple parent-child relationships)
+ * 2. ID-based matching via querySelector (most reliable for deeply nested elements)
+ * 3. Class-based matching via querySelector (fallback for elements without IDs)
+ * 
+ * @param vnode - The VNode to reconcile refs for
+ * @param domNode - The corresponding DOM node
+ * @param rootContainer - Root container element for ID-based lookups (optional, auto-detected)
  */
-function reconcileRefs(vnode: any, domNode: Node | null): void {
+function reconcileRefs(vnode: any, domNode: Node | null, rootContainer?: Element): void {
   if (!vnode || !domNode) return;
+  
+  // Store root container for ID-based lookups of deeply nested elements
+  if (!rootContainer && domNode instanceof Element) {
+    rootContainer = domNode;
+  }
 
   // 1. If this VNode has a ref, FORCE it to point to the real DOM node
   if (vnode.props?.ref && typeof vnode.props.ref === 'object' && 'instance' in vnode.props.ref) {
-    // This is the magic fix: overwrite the stale instance with the real one
-    vnode.props.ref.instance = domNode;
+    // Only update if ref.instance is not already set to a valid element in the container
+    // This preserves matches from the direct DOM walk (Phase 1)
+    if (!vnode.props.ref.instance || !rootContainer || !rootContainer.contains(vnode.props.ref.instance)) {
+      vnode.props.ref.instance = domNode;
+      
+      // If this VNode has an ID, try to find it in the root container as a fallback
+      // This helps with deeply nested elements where position matching might fail
+      if (vnode.props?.id && typeof vnode.props.id === 'string' && rootContainer) {
+        const foundById = rootContainer.querySelector(`#${vnode.props.id}`);
+        if (foundById && foundById !== domNode) {
+          // Use the element found by ID if it's different (more reliable for nested elements)
+          vnode.props.ref.instance = foundById;
+        }
+      }
+    }
   }
 
   // 2. If this VNode tracks an internal instance, update that too (optional but safe)
@@ -29,41 +61,134 @@ function reconcileRefs(vnode: any, domNode: Node | null): void {
   }
 
   // 3. Recurse through children
-  // We must handle cases where VNodes have children but the DOM might have extra text/comment nodes
-  if (vnode.children && Array.isArray(vnode.children) && vnode.children.length > 0 && domNode instanceof Element) {
-    
-    // Get real DOM element children
-    // Filter to skip pure whitespace text nodes if VNode tree doesn't track them
-    const domChildren = Array.from(domNode.childNodes).filter(node => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        // Keep text nodes only if they have non-whitespace content
-        return node.textContent?.trim().length! > 0;
+  if (vnode.children && domNode instanceof Element) {
+    // Flatten children array (handle nested arrays from .map() calls)
+    const flattenChildren = (children: any[]): any[] => {
+      const result: any[] = [];
+      for (const child of children) {
+        if (Array.isArray(child)) {
+          result.push(...flattenChildren(child));
+        } else if (child !== null && child !== undefined) {
+          result.push(child);
+        }
       }
-      // Keep all element nodes
-      return true;
-    });
-
-    let domIndex = 0;
+      return result;
+    };
     
-    for (const childVNode of vnode.children) {
-      if (!childVNode) continue;
+    const vnodeChildren = Array.isArray(vnode.children) 
+      ? flattenChildren(vnode.children)
+      : [vnode.children].filter(c => c !== null && c !== undefined);
+    
+    if (vnodeChildren.length > 0) {
+      // Get DOM children - we need both elements AND text nodes for accurate matching
+      // because VNode children can include text nodes
+      const allDomChildren = Array.from(domNode.childNodes);
+      
+      // Separate elements from text nodes for matching
+      const domElementChildren = allDomChildren.filter(node => node.nodeType !== Node.TEXT_NODE) as Element[];
+      
+      // Also track text nodes for cases where VNode has text children
+      const domTextChildren = allDomChildren.filter(node => node.nodeType === Node.TEXT_NODE);
+      
+      // Track both element and text indices separately
+      let domElementIndex = 0;
+      let domTextIndex = 0;
+      
+      for (const childVNode of vnodeChildren) {
+        if (!childVNode) continue;
 
-      // Skip non-VNode children (strings, numbers, nulls)
-      if (typeof childVNode !== 'object') {
-        // For text nodes, we might need to advance domIndex
-        // But typically text VNodes are handled differently
-        continue;
+        // Handle text VNodes (strings/numbers) - these don't have refs
+        if (typeof childVNode === 'string' || typeof childVNode === 'number') {
+          // Text nodes don't need ref reconciliation, but we should advance text index
+          // if there's a corresponding text node in DOM
+          if (domTextIndex < domTextChildren.length) {
+            domTextIndex++;
+          }
+          continue;
+        }
+
+        // Handle element VNodes (these can have refs)
+        if (typeof childVNode === 'object' && childVNode.type && typeof childVNode.type === 'string') {
+          let matchedDom: Node | null = null;
+          let matchedIndex = -1;
+          
+          // Strategy 1: Position-based matching (works well for simple parent-child relationships)
+          // Try this first for better performance and accuracy in common cases
+          if (domElementIndex < domElementChildren.length) {
+            const candidate = domElementChildren[domElementIndex];
+            // Match by tag name - this is reliable for simple parent-child relationships
+            if (candidate.tagName.toLowerCase() === childVNode.type.toLowerCase()) {
+              matchedDom = candidate;
+              matchedIndex = domElementIndex;
+            }
+          }
+          
+          // Strategy 2: ID-based matching (most reliable for deeply nested elements)
+          // Use this when position-based fails or when we have an ID
+          if (!matchedDom && childVNode.props?.id && typeof childVNode.props.id === 'string' && rootContainer) {
+            const foundById: Element | null = rootContainer.querySelector(`#${childVNode.props.id}`);
+            if (foundById && domNode.contains(foundById)) {
+              matchedDom = foundById;
+              matchedIndex = domElementChildren.indexOf(foundById);
+            }
+          }
+          
+          // Strategy 3: Class-based matching (fallback for elements without IDs)
+          // Only use if position and ID matching both failed
+          if (!matchedDom && childVNode.props?.class && domNode instanceof Element) {
+            let classNames: string[] = [];
+            
+            if (typeof childVNode.props.class === 'string') {
+              classNames = childVNode.props.class.split(/\s+/).filter((c: string) => c.length > 0);
+            } else if (typeof childVNode.props.class === 'object' && childVNode.props.class !== null) {
+              classNames = Object.keys(childVNode.props.class).filter(k => childVNode.props.class[k]);
+            }
+            
+            if (classNames.length > 0) {
+              const primaryClass = classNames[0];
+              // Build selector with tag name if available (more specific = better match)
+              const selector = childVNode.type 
+                ? `${childVNode.type}.${primaryClass}` 
+                : `.${primaryClass}`;
+              
+              // Search within current subtree only
+              const foundByClass: Element | null = domNode.querySelector(selector);
+              if (foundByClass) {
+                // Verify tag name matches if specified
+                if (!childVNode.type || foundByClass.tagName.toLowerCase() === childVNode.type.toLowerCase()) {
+                  // Verify it's actually a child/descendant of domNode
+                  const parent: Node | null = foundByClass.parentNode;
+                  if (parent === domNode || (parent && domNode.contains(parent))) {
+                    const indexInChildren = domElementChildren.indexOf(foundByClass);
+                    if (indexInChildren >= 0) {
+                      matchedDom = foundByClass;
+                      matchedIndex = indexInChildren;
+                    }
+                  }
+                }
+              }
+            }
+          }
+          
+          if (matchedDom && matchedIndex >= 0) {
+            // Recursively fix the child
+            reconcileRefs(childVNode, matchedDom, rootContainer);
+            // Advance past the matched node
+            domElementIndex = matchedIndex + 1;
+          } else if (domElementIndex < domElementChildren.length) {
+            // Last resort: use next element if tag matches
+            const fallback = domElementChildren[domElementIndex];
+            // Only use fallback if tag name matches (safer than blind matching)
+            if (!childVNode.type || fallback.tagName.toLowerCase() === childVNode.type.toLowerCase()) {
+              reconcileRefs(childVNode, fallback, rootContainer);
+              domElementIndex++;
+            }
+            // If tag doesn't match, skip this VNode to avoid incorrect ref assignments
+          }
+        }
+        // Text VNodes (strings/numbers) don't have refs, so we skip them
+        // They're handled when we recurse into their parent element
       }
-
-      // Ensure we don't run out of DOM nodes
-      if (domIndex >= domChildren.length) break;
-
-      const currentDom = domChildren[domIndex];
-
-      // Recursively fix the child
-      reconcileRefs(childVNode, currentDom);
-
-      domIndex++;
     }
   }
 }
@@ -111,9 +236,107 @@ export class ComponentTestHelper {
     }
 
     // FIX: Reconcile the Refs!
-    // We match the VNode tree (which holds the user's refs) to the Container's first child
-    // This "heals" the disconnect caused by cloning/rebuilding during render
-    reconcileRefs(vnode, element);
+    // Two-phase approach solves the "Ghost Reference" problem:
+    // 
+    // Phase 1: Direct DOM queries (fast, reliable)
+    //   - Collect all refs from VNode tree
+    //   - Match by ID using querySelector (most reliable)
+    //   - Match by class+tag for elements without IDs
+    //   - This handles 90%+ of cases efficiently
+    //
+    // Phase 2: Recursive VNode-to-DOM matching (comprehensive fallback)
+    //   - Handles complex nested structures
+    //   - Uses position, ID, and class-based matching strategies
+    //   - Ensures no refs are left unset
+    
+    // Phase 1: Collect all refs and match them directly to DOM elements
+    const refsMap = new Map<any, any>();
+    const collectRefs = (vnode: any): void => {
+      if (!vnode) return;
+      if (vnode.props?.ref && typeof vnode.props.ref === 'object' && 'instance' in vnode.props.ref) {
+        refsMap.set(vnode.props.ref, vnode);
+      }
+      if (vnode.children) {
+        const children = Array.isArray(vnode.children) ? vnode.children : [vnode.children];
+        children.forEach((child: any) => {
+          if (child && typeof child === 'object') {
+            collectRefs(child);
+          }
+        });
+      }
+    };
+    collectRefs(vnode);
+    
+    // Match refs to DOM elements using querySelector (more reliable than walking)
+    // This direct DOM query approach is faster and more accurate than position-based matching
+    refsMap.forEach((vnode, ref) => {
+      // Skip if ref is already correctly set (from a previous match)
+      // Check if ref.instance is a valid Node and is in the container
+      if (ref.instance && ref.instance instanceof Node) {
+        try {
+          if (this.container.contains(ref.instance)) {
+            return; // Ref is already correctly set
+          }
+        } catch (e) {
+          // If contains() fails, the ref is definitely not in the container, continue matching
+        }
+      }
+      
+      // Strategy 1: Match by ID first (most reliable - IDs are unique)
+      if (vnode.props?.id && typeof vnode.props.id === 'string') {
+        const found = this.container.querySelector(`#${vnode.props.id}`);
+        if (found) {
+          // Verify tag name matches if specified (extra safety check)
+          if (!vnode.type || found.tagName.toLowerCase() === vnode.type.toLowerCase()) {
+            ref.instance = found;
+            return; // ID match is definitive, no need to try class matching
+          }
+        }
+      }
+      
+      // Strategy 2: Match by class (for elements without IDs)
+      // This is less reliable since classes aren't unique, but works for most test cases
+      if (vnode.props?.class) {
+        let classNames: string[] = [];
+        
+        if (typeof vnode.props.class === 'string') {
+          // Split by spaces and filter empty strings
+          classNames = vnode.props.class.split(/\s+/).filter((c: string) => c.length > 0);
+        } else if (typeof vnode.props.class === 'object' && vnode.props.class !== null) {
+          // Handle class object: { 'class-name': true, 'other-class': false }
+          classNames = Object.keys(vnode.props.class).filter(k => vnode.props.class[k]);
+        }
+        
+        if (classNames.length > 0) {
+          // Use the first class for selector (most specific)
+          const primaryClass = classNames[0];
+          
+          // Build selector with tag name if available (more specific = better match)
+          const selector = vnode.type 
+            ? `${vnode.type}.${primaryClass}` 
+            : `.${primaryClass}`;
+          
+          const found = this.container.querySelector(selector);
+          
+          if (found) {
+            // Verify tag name matches if specified
+            if (!vnode.type || found.tagName.toLowerCase() === vnode.type.toLowerCase()) {
+              // Additional verification: check if all classes match (if multiple classes)
+              if (classNames.length === 1 || classNames.every(cn => found.classList.contains(cn))) {
+                ref.instance = found;
+                return;
+              }
+            }
+          }
+        }
+      }
+      
+      // If neither ID nor class matching worked, Phase 2 (reconcileRefs) will handle it
+      // This ensures we don't leave any refs unset
+    });
+    
+    // Phase 2: Recursive VNode-to-DOM matching for any remaining cases
+    reconcileRefs(vnode, element, this.container);
 
     // Call onAfterRender AFTER the VNode is in the DOM and refs are populated AND reconciled
     // This matches the MSFS SDK lifecycle - onAfterRender is called after render is complete

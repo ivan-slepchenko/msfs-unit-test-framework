@@ -17,9 +17,6 @@ class TestComponent extends DisplayComponent<TestComponentProps> {
   private labelDisplayRef = FSComponent.createRef() as { instance: HTMLDivElement | null };
 
   public onAfterRender(): void {
-    console.log('[TestComponent.onAfterRender] valueDisplayRef:', this.valueDisplayRef);
-    console.log('[TestComponent.onAfterRender] value:', this.props.value);
-    
     if (this.props.valueSource) {
       this.props.valueSource.sub((value: number) => {
         if (this.valueDisplayRef.instance) {
@@ -28,11 +25,7 @@ class TestComponent extends DisplayComponent<TestComponentProps> {
       }, true);
     } else if (this.props.value !== undefined) {
       if (this.valueDisplayRef.instance) {
-        console.log('[TestComponent.onAfterRender] Setting textContent to', this.props.value);
         this.valueDisplayRef.instance.textContent = this.props.value.toString();
-        console.log('[TestComponent.onAfterRender] textContent is now', this.valueDisplayRef.instance.textContent);
-      } else {
-        console.log('[TestComponent.onAfterRender] ERROR: valueDisplayRef.instance is null!');
       }
     }
 
@@ -82,10 +75,6 @@ describe('MSFS Unit Test Framework Examples', () => {
         label: 'Static Value'
       });
 
-      console.log('[TEST] Container HTML:', helper.getContainer().innerHTML);
-      console.log('[TEST] .value element:', helper.querySelector('.value'));
-      console.log('[TEST] .value textContent:', helper.querySelector('.value')?.textContent);
-      
       expect(helper.getTextContent('.value')).toBe('100');
       expect(helper.getTextContent('.label')).toBe('Static Value');
     });
