@@ -27,8 +27,9 @@ import { TestEnvironment } from './TestEnvironment';
  * @param vnode - The VNode to reconcile refs for
  * @param domNode - The corresponding DOM node
  * @param rootContainer - Root container element for ID-based lookups (optional, auto-detected)
+ * @param matchedDomNodes - WeakSet to track which DOM nodes have already been matched (prevents duplicates)
  */
-function reconcileRefs(vnode: any, domNode: Node | null, rootContainer?: Element): void {
+function reconcileRefs(vnode: any, domNode: Node | null, rootContainer?: Element, matchedDomNodes: WeakSet<Node> = new WeakSet()): void {
   if (!vnode || !domNode) return;
   
   // Store root container for ID-based lookups of deeply nested elements
@@ -41,15 +42,21 @@ function reconcileRefs(vnode: any, domNode: Node | null, rootContainer?: Element
     // Only update if ref.instance is not already set to a valid element in the container
     // This preserves matches from the direct DOM walk (Phase 1)
     if (!vnode.props.ref.instance || !rootContainer || !rootContainer.contains(vnode.props.ref.instance)) {
-      vnode.props.ref.instance = domNode;
-      
-      // If this VNode has an ID, try to find it in the root container as a fallback
-      // This helps with deeply nested elements where position matching might fail
-      if (vnode.props?.id && typeof vnode.props.id === 'string' && rootContainer) {
-        const foundById = rootContainer.querySelector(`#${vnode.props.id}`);
-        if (foundById && foundById !== domNode) {
-          // Use the element found by ID if it's different (more reliable for nested elements)
-          vnode.props.ref.instance = foundById;
+      // Check if this DOM node is already matched to another ref (prevent duplicates)
+      if (!matchedDomNodes.has(domNode)) {
+        vnode.props.ref.instance = domNode;
+        matchedDomNodes.add(domNode); // Mark as matched
+        
+        // If this VNode has an ID, try to find it in the root container as a fallback
+        // This helps with deeply nested elements where position matching might fail
+        if (vnode.props?.id && typeof vnode.props.id === 'string' && rootContainer) {
+          const foundById = rootContainer.querySelector(`#${vnode.props.id}`);
+          if (foundById && foundById !== domNode && !matchedDomNodes.has(foundById)) {
+            // Use the element found by ID if it's different (more reliable for nested elements)
+            vnode.props.ref.instance = foundById;
+            matchedDomNodes.delete(domNode); // Remove old match
+            matchedDomNodes.add(foundById); // Mark new match
+          }
         }
       }
     }
@@ -133,6 +140,51 @@ function reconcileRefs(vnode: any, domNode: Node | null, rootContainer?: Element
             }
           }
           
+          // Strategy 2.5: Data-* attribute matching (for elements with unique data attributes)
+          // Use this when position and ID matching fail but we have unique data attributes
+          if (!matchedDom && childVNode.props && rootContainer) {
+            const dataAttrs = Object.keys(childVNode.props)
+              .filter(key => {
+                // Match data-* (kebab-case) or data followed by uppercase (camelCase like dataRange)
+                return key.startsWith('data-') || 
+                       (key.startsWith('data') && key.length > 4 && key[4] === key[4].toUpperCase());
+              })
+              .map(key => {
+                // Convert camelCase to kebab-case if needed
+                let attr = key;
+                if (key.startsWith('data') && !key.startsWith('data-')) {
+                  // It's camelCase like "dataRange" - convert to "data-range"
+                  attr = 'data-' + key.substring(4).replace(/([A-Z])/g, '-$1').toLowerCase();
+                }
+                return { attr, value: childVNode.props[key] };
+              });
+            
+            if (dataAttrs.length > 0) {
+              let selector = childVNode.type || '*';
+              
+              dataAttrs.forEach(({ attr, value }) => {
+                const kebabAttr = attr.replace(/([A-Z])/g, '-$1').toLowerCase();
+                const escapedValue = String(value).replace(/"/g, '\\"');
+                selector += `[${kebabAttr}="${escapedValue}"]`;
+              });
+              
+              const foundByData: Element | null = rootContainer.querySelector(selector);
+              if (foundByData && domNode.contains(foundByData)) {
+                // Verify tag name matches
+                if (!childVNode.type || foundByData.tagName.toLowerCase() === childVNode.type.toLowerCase()) {
+                  // Check if already matched
+                  if (!matchedDomNodes.has(foundByData)) {
+                    const indexInChildren = domElementChildren.indexOf(foundByData);
+                    if (indexInChildren >= 0) {
+                      matchedDom = foundByData;
+                      matchedIndex = indexInChildren;
+                    }
+                  }
+                }
+              }
+            }
+          }
+          
           // Strategy 3: Class-based matching (fallback for elements without IDs)
           // Only use if position and ID matching both failed
           if (!matchedDom && childVNode.props?.class && domNode instanceof Element) {
@@ -151,28 +203,43 @@ function reconcileRefs(vnode: any, domNode: Node | null, rootContainer?: Element
                 ? `${childVNode.type}.${primaryClass}` 
                 : `.${primaryClass}`;
               
-              // Search within current subtree only
-              const foundByClass: Element | null = domNode.querySelector(selector);
-              if (foundByClass) {
+              // Search within current subtree only - get all matches
+              const allMatchesByClass = Array.from(domNode.querySelectorAll(selector));
+              
+              // Find first match that hasn't been assigned to another ref
+              const foundByClass = allMatchesByClass.find(el => {
                 // Verify tag name matches if specified
-                if (!childVNode.type || foundByClass.tagName.toLowerCase() === childVNode.type.toLowerCase()) {
-                  // Verify it's actually a child/descendant of domNode
-                  const parent: Node | null = foundByClass.parentNode;
-                  if (parent === domNode || (parent && domNode.contains(parent))) {
-                    const indexInChildren = domElementChildren.indexOf(foundByClass);
-                    if (indexInChildren >= 0) {
-                      matchedDom = foundByClass;
-                      matchedIndex = indexInChildren;
-                    }
-                  }
+                if (childVNode.type && el.tagName.toLowerCase() !== childVNode.type.toLowerCase()) {
+                  return false;
+                }
+                
+                // Verify it's actually a child/descendant of domNode
+                const parent: Node | null = el.parentNode;
+                if (!(parent === domNode || (parent && domNode.contains(parent)))) {
+                  return false;
+                }
+                
+                // Check if already matched
+                if (matchedDomNodes.has(el)) {
+                  return false;
+                }
+                
+                return true;
+              }) as Element | null;
+              
+              if (foundByClass) {
+                const indexInChildren = domElementChildren.indexOf(foundByClass);
+                if (indexInChildren >= 0) {
+                  matchedDom = foundByClass;
+                  matchedIndex = indexInChildren;
                 }
               }
             }
           }
           
           if (matchedDom && matchedIndex >= 0) {
-            // Recursively fix the child
-            reconcileRefs(childVNode, matchedDom, rootContainer);
+            // Recursively fix the child - pass matchedDomNodes to track assignments
+            reconcileRefs(childVNode, matchedDom, rootContainer, matchedDomNodes);
             // Advance past the matched node
             domElementIndex = matchedIndex + 1;
           } else if (domElementIndex < domElementChildren.length) {
@@ -180,7 +247,7 @@ function reconcileRefs(vnode: any, domNode: Node | null, rootContainer?: Element
             const fallback = domElementChildren[domElementIndex];
             // Only use fallback if tag name matches (safer than blind matching)
             if (!childVNode.type || fallback.tagName.toLowerCase() === childVNode.type.toLowerCase()) {
-              reconcileRefs(childVNode, fallback, rootContainer);
+              reconcileRefs(childVNode, fallback, rootContainer, matchedDomNodes);
               domElementIndex++;
             }
             // If tag doesn't match, skip this VNode to avoid incorrect ref assignments
@@ -224,6 +291,25 @@ export class ComponentTestHelper {
       throw new Error('Component render() returned null');
     }
 
+    // Phase 1: Collect all refs from VNode tree BEFORE FSComponent.render() modifies it
+    // FSComponent.render() may modify the VNode tree in place, so we need to collect refs first
+    const refsMap = new Map<any, any>();
+    const collectRefs = (vnode: any): void => {
+      if (!vnode) return;
+      if (vnode.props?.ref && typeof vnode.props.ref === 'object' && 'instance' in vnode.props.ref) {
+        refsMap.set(vnode.props.ref, vnode);
+      }
+      if (vnode.children) {
+        const children = Array.isArray(vnode.children) ? vnode.children : [vnode.children];
+        children.forEach((child: any) => {
+          if (child && typeof child === 'object') {
+            collectRefs(child);
+          }
+        });
+      }
+    };
+    collectRefs(vnode); // Collect BEFORE FSComponent.render() modifies the tree
+
     // Render to DOM - this is when refs get populated and elements are added to container
     FSComponent.render(vnode, this.container);
 
@@ -249,23 +335,7 @@ export class ComponentTestHelper {
     //   - Uses position, ID, and class-based matching strategies
     //   - Ensures no refs are left unset
     
-    // Phase 1: Collect all refs and match them directly to DOM elements
-    const refsMap = new Map<any, any>();
-    const collectRefs = (vnode: any): void => {
-      if (!vnode) return;
-      if (vnode.props?.ref && typeof vnode.props.ref === 'object' && 'instance' in vnode.props.ref) {
-        refsMap.set(vnode.props.ref, vnode);
-      }
-      if (vnode.children) {
-        const children = Array.isArray(vnode.children) ? vnode.children : [vnode.children];
-        children.forEach((child: any) => {
-          if (child && typeof child === 'object') {
-            collectRefs(child);
-          }
-        });
-      }
-    };
-    collectRefs(vnode);
+    // Phase 1: Match collected refs to DOM elements (refs were collected before FSComponent.render())
     
     // Match refs to DOM elements using querySelector (more reliable than walking)
     // This direct DOM query approach is faster and more accurate than position-based matching
@@ -294,6 +364,66 @@ export class ComponentTestHelper {
         }
       }
       
+      // Strategy 1.5: Match by data-* attributes (UNIQUE identifiers)
+      // This handles cases where multiple elements share the same class but have unique data attributes
+      if (!ref.instance && vnode.props) {
+        // Collect all data-* attributes from props
+        // Handle both camelCase (dataRange) and kebab-case (data-range) prop names
+        const dataAttrs = Object.keys(vnode.props)
+          .filter(key => {
+            // Match data-* (kebab-case) or data followed by uppercase (camelCase like dataRange)
+            return key.startsWith('data-') || 
+                   (key.startsWith('data') && key.length > 4 && key[4] === key[4].toUpperCase());
+          })
+          .map(key => {
+            // Convert camelCase to kebab-case if needed
+            let attr = key;
+            if (key.startsWith('data') && !key.startsWith('data-')) {
+              // It's camelCase like "dataRange" - convert to "data-range"
+              attr = 'data-' + key.substring(4).replace(/([A-Z])/g, '-$1').toLowerCase();
+            }
+            return { attr, value: vnode.props[key] };
+          });
+        
+        if (dataAttrs.length > 0) {
+          // Build selector: circle[data-range="25"]
+          let selector = vnode.type || '*';
+          
+          dataAttrs.forEach(({ attr, value }) => {
+            // Convert camelCase to kebab-case (dataRange → data-range)
+            // Also handle already-kebab-case (data-range stays data-range)
+            const kebabAttr = attr.replace(/([A-Z])/g, '-$1').toLowerCase();
+            // Escape value for CSS selector (handle special characters)
+            const escapedValue = String(value).replace(/"/g, '\\"');
+            selector += `[${kebabAttr}="${escapedValue}"]`;
+          });
+          
+          const foundByData = this.container.querySelector(selector);
+          
+          if (foundByData) {
+            // Verify tag name matches
+            if (!vnode.type || foundByData.tagName.toLowerCase() === vnode.type.toLowerCase()) {
+              // CRITICAL: Verify the element is actually in the container
+              // This ensures we're pointing to the cloned element, not the original
+              if (!this.container.contains(foundByData)) {
+                // Element found but not in container - skip this match
+                return;
+              }
+              
+              // Check if this element is already assigned to another ref (prevent duplicates)
+              const isAlreadyAssigned = Array.from(refsMap.keys()).some(otherRef => 
+                otherRef !== ref && otherRef.instance === foundByData
+              );
+              
+              if (!isAlreadyAssigned) {
+                ref.instance = foundByData;
+                return; // Success - move to next ref
+              }
+            }
+          }
+        }
+      }
+      
       // Strategy 2: Match by class (for elements without IDs)
       // This is less reliable since classes aren't unique, but works for most test cases
       if (vnode.props?.class) {
@@ -316,16 +446,35 @@ export class ComponentTestHelper {
             ? `${vnode.type}.${primaryClass}` 
             : `.${primaryClass}`;
           
-          const found = this.container.querySelector(selector);
+          // Get all matches, not just the first one
+          const allMatches = Array.from(this.container.querySelectorAll(selector));
+          
+          // Find first match that hasn't been assigned to another ref
+          const found = allMatches.find(el => {
+            // Verify tag name matches if specified
+            if (vnode.type && el.tagName.toLowerCase() !== vnode.type.toLowerCase()) {
+              return false;
+            }
+            
+            // Additional verification: check if all classes match (if multiple classes)
+            if (classNames.length > 1 && !classNames.every(cn => el.classList.contains(cn))) {
+              return false;
+            }
+            
+            // Check if this element is already assigned to another ref (prevent duplicates)
+            const isAlreadyAssigned = Array.from(refsMap.keys()).some(otherRef => 
+              otherRef !== ref && otherRef.instance === el
+            );
+            
+            return !isAlreadyAssigned;
+          });
           
           if (found) {
-            // Verify tag name matches if specified
-            if (!vnode.type || found.tagName.toLowerCase() === vnode.type.toLowerCase()) {
-              // Additional verification: check if all classes match (if multiple classes)
-              if (classNames.length === 1 || classNames.every(cn => found.classList.contains(cn))) {
-                ref.instance = found;
-                return;
-              }
+            // CRITICAL: Verify the element is actually in the container
+            // This ensures we're pointing to the cloned element, not the original
+            if (this.container.contains(found)) {
+              ref.instance = found;
+              return;
             }
           }
         }
@@ -336,7 +485,9 @@ export class ComponentTestHelper {
     });
     
     // Phase 2: Recursive VNode-to-DOM matching for any remaining cases
-    reconcileRefs(vnode, element, this.container);
+    // Create a WeakSet to track matched nodes and prevent duplicate assignments
+    const matchedDomNodes = new WeakSet<Node>();
+    reconcileRefs(vnode, element, this.container, matchedDomNodes);
 
     // Call onAfterRender AFTER the VNode is in the DOM and refs are populated AND reconciled
     // This matches the MSFS SDK lifecycle - onAfterRender is called after render is complete

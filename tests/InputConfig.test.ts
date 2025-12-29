@@ -21,140 +21,356 @@ describe('Input Configuration', () => {
   });
 
   describe('StormScopeKeyboardBindings', () => {
-    test('should have MENU binding (Control+Q)', () => {
+    test('should have MENU binding with all key formats (Control+Q)', () => {
       expect(StormScopeKeyboardBindings.MENU.key).toBe('KeyQ');
+      expect(StormScopeKeyboardBindings.MENU.keyCode).toBe(81);
+      expect(StormScopeKeyboardBindings.MENU.keyChar).toBe('q');
       expect(StormScopeKeyboardBindings.MENU.ctrl).toBe(true);
       expect(StormScopeKeyboardBindings.MENU.shift).toBe(false);
       expect(StormScopeKeyboardBindings.MENU.alt).toBe(false);
     });
 
-    test('should have WX binding (Control+W)', () => {
+    test('should have WX binding with all key formats (Control+W)', () => {
       expect(StormScopeKeyboardBindings.WX.key).toBe('KeyW');
+      expect(StormScopeKeyboardBindings.WX.keyCode).toBe(87);
+      expect(StormScopeKeyboardBindings.WX.keyChar).toBe('w');
       expect(StormScopeKeyboardBindings.WX.ctrl).toBe(true);
     });
 
-    test('should have RANGE binding (Control+E)', () => {
+    test('should have RANGE binding with all key formats (Control+E)', () => {
       expect(StormScopeKeyboardBindings.RANGE.key).toBe('KeyE');
+      expect(StormScopeKeyboardBindings.RANGE.keyCode).toBe(69);
+      expect(StormScopeKeyboardBindings.RANGE.keyChar).toBe('e');
       expect(StormScopeKeyboardBindings.RANGE.ctrl).toBe(true);
     });
 
-    test('should have CLEAR binding (Control+R)', () => {
+    test('should have CLEAR binding with all key formats (Control+R)', () => {
       expect(StormScopeKeyboardBindings.CLEAR.key).toBe('KeyR');
+      expect(StormScopeKeyboardBindings.CLEAR.keyCode).toBe(82);
+      expect(StormScopeKeyboardBindings.CLEAR.keyChar).toBe('r');
       expect(StormScopeKeyboardBindings.CLEAR.ctrl).toBe(true);
     });
   });
 
   describe('matchesKeyboardBinding', () => {
-    test('should match MENU binding', () => {
-      const event = new KeyboardEvent('keydown', {
-        code: 'KeyQ',
-        ctrlKey: true,
-        shiftKey: false,
-        altKey: false
+    describe('Modern event.code support', () => {
+      test('should match MENU binding using event.code', () => {
+        const event = new KeyboardEvent('keydown', {
+          code: 'KeyQ',
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        });
+        
+        expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.MENU)).toBe(true);
       });
-      
-      expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.MENU)).toBe(true);
+
+      test('should match WX binding using event.code', () => {
+        const event = new KeyboardEvent('keydown', {
+          code: 'KeyW',
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        });
+        
+        expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.WX)).toBe(true);
+      });
     });
 
-    test('should not match if key is different', () => {
-      const event = new KeyboardEvent('keydown', {
-        code: 'KeyA',
-        ctrlKey: true,
-        shiftKey: false,
-        altKey: false
+    describe('Legacy event.keyCode support (Coherent GT compatibility)', () => {
+      test('should match MENU binding using event.keyCode', () => {
+        const event = {
+          code: undefined,
+          keyCode: 81, // Q
+          key: undefined,
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        } as unknown as KeyboardEvent;
+        
+        expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.MENU)).toBe(true);
       });
-      
-      expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.MENU)).toBe(false);
+
+      test('should match WX binding using event.keyCode', () => {
+        const event = {
+          code: undefined,
+          keyCode: 87, // W
+          key: undefined,
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        } as unknown as KeyboardEvent;
+        
+        expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.WX)).toBe(true);
+      });
+
+      test('should match RANGE binding using event.keyCode', () => {
+        const event = {
+          code: undefined,
+          keyCode: 69, // E
+          key: undefined,
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        } as unknown as KeyboardEvent;
+        
+        expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.RANGE)).toBe(true);
+      });
+
+      test('should match CLEAR binding using event.keyCode', () => {
+        const event = {
+          code: undefined,
+          keyCode: 82, // R
+          key: undefined,
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        } as unknown as KeyboardEvent;
+        
+        expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.CLEAR)).toBe(true);
+      });
     });
 
-    test('should not match if ctrl key is missing', () => {
-      const event = new KeyboardEvent('keydown', {
-        code: 'KeyQ',
-        ctrlKey: false,
-        shiftKey: false,
-        altKey: false
+    describe('Fallback event.key support', () => {
+      test('should match MENU binding using event.key (lowercase)', () => {
+        const event = {
+          code: undefined,
+          keyCode: undefined,
+          key: 'q',
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        } as unknown as KeyboardEvent;
+        
+        expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.MENU)).toBe(true);
       });
-      
-      expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.MENU)).toBe(false);
+
+      test('should match WX binding using event.key (lowercase)', () => {
+        const event = {
+          code: undefined,
+          keyCode: undefined,
+          key: 'w',
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        } as unknown as KeyboardEvent;
+        
+        expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.WX)).toBe(true);
+      });
+
+      test('should not match if event.key is uppercase', () => {
+        const event = {
+          code: undefined,
+          keyCode: undefined,
+          key: 'Q', // Uppercase
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        } as unknown as KeyboardEvent;
+        
+        // Should not match because we compare lowercase
+        expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.MENU)).toBe(false);
+      });
     });
 
-    test('should not match if shift key is pressed', () => {
-      const event = new KeyboardEvent('keydown', {
-        code: 'KeyQ',
-        ctrlKey: true,
-        shiftKey: true,
-        altKey: false
+    describe('Modifier key validation', () => {
+      test('should not match if key is different', () => {
+        const event = new KeyboardEvent('keydown', {
+          code: 'KeyA',
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        });
+        
+        expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.MENU)).toBe(false);
       });
-      
-      expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.MENU)).toBe(false);
+
+      test('should not match if ctrl key is missing', () => {
+        const event = new KeyboardEvent('keydown', {
+          code: 'KeyQ',
+          ctrlKey: false,
+          shiftKey: false,
+          altKey: false
+        });
+        
+        expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.MENU)).toBe(false);
+      });
+
+      test('should not match if shift key is pressed', () => {
+        const event = new KeyboardEvent('keydown', {
+          code: 'KeyQ',
+          ctrlKey: true,
+          shiftKey: true,
+          altKey: false
+        });
+        
+        expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.MENU)).toBe(false);
+      });
+
+      test('should not match if alt key is pressed', () => {
+        const event = new KeyboardEvent('keydown', {
+          code: 'KeyQ',
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: true
+        });
+        
+        expect(matchesKeyboardBinding(event, StormScopeKeyboardBindings.MENU)).toBe(false);
+      });
     });
   });
 
   describe('getSimEventFromKeyboard', () => {
-    test('should return MENU event for Control+Q', () => {
-      const event = new KeyboardEvent('keydown', {
-        code: 'KeyQ',
-        ctrlKey: true,
-        shiftKey: false,
-        altKey: false
+    describe('Modern event.code support', () => {
+      test('should return MENU event for Control+Q (event.code)', () => {
+        const event = new KeyboardEvent('keydown', {
+          code: 'KeyQ',
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        });
+        
+        expect(getSimEventFromKeyboard(event)).toBe(StormScopeSimEvents.MENU);
       });
-      
-      expect(getSimEventFromKeyboard(event)).toBe(StormScopeSimEvents.MENU);
+
+      test('should return WX event for Control+W (event.code)', () => {
+        const event = new KeyboardEvent('keydown', {
+          code: 'KeyW',
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        });
+        
+        expect(getSimEventFromKeyboard(event)).toBe(StormScopeSimEvents.WX);
+      });
+
+      test('should return RANGE event for Control+E (event.code)', () => {
+        const event = new KeyboardEvent('keydown', {
+          code: 'KeyE',
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        });
+        
+        expect(getSimEventFromKeyboard(event)).toBe(StormScopeSimEvents.RANGE);
+      });
+
+      test('should return CLEAR event for Control+R (event.code)', () => {
+        const event = new KeyboardEvent('keydown', {
+          code: 'KeyR',
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        });
+        
+        expect(getSimEventFromKeyboard(event)).toBe(StormScopeSimEvents.CLEAR);
+      });
     });
 
-    test('should return WX event for Control+W', () => {
-      const event = new KeyboardEvent('keydown', {
-        code: 'KeyW',
-        ctrlKey: true,
-        shiftKey: false,
-        altKey: false
+    describe('Legacy event.keyCode support (Coherent GT)', () => {
+      test('should return MENU event for Control+Q (event.keyCode)', () => {
+        const event = {
+          code: undefined,
+          keyCode: 81, // Q
+          key: undefined,
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        } as unknown as KeyboardEvent;
+        
+        expect(getSimEventFromKeyboard(event)).toBe(StormScopeSimEvents.MENU);
       });
-      
-      expect(getSimEventFromKeyboard(event)).toBe(StormScopeSimEvents.WX);
+
+      test('should return WX event for Control+W (event.keyCode)', () => {
+        const event = {
+          code: undefined,
+          keyCode: 87, // W
+          key: undefined,
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        } as unknown as KeyboardEvent;
+        
+        expect(getSimEventFromKeyboard(event)).toBe(StormScopeSimEvents.WX);
+      });
+
+      test('should return RANGE event for Control+E (event.keyCode)', () => {
+        const event = {
+          code: undefined,
+          keyCode: 69, // E
+          key: undefined,
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        } as unknown as KeyboardEvent;
+        
+        expect(getSimEventFromKeyboard(event)).toBe(StormScopeSimEvents.RANGE);
+      });
+
+      test('should return CLEAR event for Control+R (event.keyCode)', () => {
+        const event = {
+          code: undefined,
+          keyCode: 82, // R
+          key: undefined,
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        } as unknown as KeyboardEvent;
+        
+        expect(getSimEventFromKeyboard(event)).toBe(StormScopeSimEvents.CLEAR);
+      });
     });
 
-    test('should return RANGE event for Control+E', () => {
-      const event = new KeyboardEvent('keydown', {
-        code: 'KeyE',
-        ctrlKey: true,
-        shiftKey: false,
-        altKey: false
+    describe('Fallback event.key support', () => {
+      test('should return MENU event for Control+Q (event.key)', () => {
+        const event = {
+          code: undefined,
+          keyCode: undefined,
+          key: 'q',
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        } as unknown as KeyboardEvent;
+        
+        expect(getSimEventFromKeyboard(event)).toBe(StormScopeSimEvents.MENU);
       });
-      
-      expect(getSimEventFromKeyboard(event)).toBe(StormScopeSimEvents.RANGE);
+
+      test('should return WX event for Control+W (event.key)', () => {
+        const event = {
+          code: undefined,
+          keyCode: undefined,
+          key: 'w',
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        } as unknown as KeyboardEvent;
+        
+        expect(getSimEventFromKeyboard(event)).toBe(StormScopeSimEvents.WX);
+      });
     });
 
-    test('should return CLEAR event for Control+R', () => {
-      const event = new KeyboardEvent('keydown', {
-        code: 'KeyR',
-        ctrlKey: true,
-        shiftKey: false,
-        altKey: false
+    describe('Error cases', () => {
+      test('should return null for unmatched key combination', () => {
+        const event = new KeyboardEvent('keydown', {
+          code: 'KeyA',
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false
+        });
+        
+        expect(getSimEventFromKeyboard(event)).toBeNull();
       });
-      
-      expect(getSimEventFromKeyboard(event)).toBe(StormScopeSimEvents.CLEAR);
-    });
 
-    test('should return null for unmatched key combination', () => {
-      const event = new KeyboardEvent('keydown', {
-        code: 'KeyA',
-        ctrlKey: true,
-        shiftKey: false,
-        altKey: false
+      test('should return null for key without ctrl', () => {
+        const event = new KeyboardEvent('keydown', {
+          code: 'KeyQ',
+          ctrlKey: false,
+          shiftKey: false,
+          altKey: false
+        });
+        
+        expect(getSimEventFromKeyboard(event)).toBeNull();
       });
-      
-      expect(getSimEventFromKeyboard(event)).toBeNull();
-    });
-
-    test('should return null for key without ctrl', () => {
-      const event = new KeyboardEvent('keydown', {
-        code: 'KeyQ',
-        ctrlKey: false,
-        shiftKey: false,
-        altKey: false
-      });
-      
-      expect(getSimEventFromKeyboard(event)).toBeNull();
     });
   });
 
