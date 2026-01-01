@@ -23,7 +23,7 @@ module.exports = {
     '^@microsoft/msfs-garminsdk/(.*)$': path.resolve(__dirname, 'src/mocks/GarminSDKAdapter.ts'),
     '^@microsoft/msfs-types$': path.resolve(__dirname, 'node_modules/@microsoft/msfs-types'),
     // Map test framework imports
-    '^@msfs/unit-test-framework$': '<rootDir>/src',
+    '^@avimate/msfs-jest-utils$': '<rootDir>/src',
   },
   modulePaths: [
     '<rootDir>/node_modules',

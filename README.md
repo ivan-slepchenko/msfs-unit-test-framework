@@ -17,7 +17,7 @@ Unit testing framework for MSFS HTML/JS instruments (Jest + JSDOM).
 ### As a library (recommended)
 
 ```bash
-npm install --save-dev @msfs/unit-test-framework
+npm install --save-dev @avimate/msfs-jest-utils
 ```
 
 ### Local development

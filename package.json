@@ -1,5 +1,5 @@
 {
-  "name": "@msfs/unit-test-framework",
+  "name": "@avimate/msfs-jest-utils",
   "version": "1.0.0",
   "description": "Unit testing framework for MSFS instruments with DOM support via jsdom",
   "main": "dist/index.js",
