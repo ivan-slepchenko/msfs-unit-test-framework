@@ -80,14 +80,54 @@ export function setupMSFSGlobals(): void {
 
               // For SVG elements, always use setAttribute
               if (element instanceof SVGElement) {
+                // Style object support (including Subscribable values)
+                if (key === 'style' && typeof value === 'object') {
+                  Object.keys(value).forEach(styleKey => {
+                    const styleVal = (value as any)[styleKey];
+                    if (styleVal && typeof styleVal === 'object' && typeof styleVal.get === 'function' && typeof styleVal.sub === 'function') {
+                      try { (element as any).style[styleKey] = String(styleVal.get()); } catch {}
+                      styleVal.sub((v: any) => { try { (element as any).style[styleKey] = String(v); } catch {} });
+                    } else {
+                      try { (element as any).style[styleKey] = String(styleVal); } catch {}
+                    }
+                  });
+                  return;
+                }
+
+                if (key === 'className') {
+                  element.setAttribute('class', String(value));
+                  return;
+                }
                 if (key === 'class') {
                   element.setAttribute('class', String(value));
-                } else {
-                  element.setAttribute(key, String(value));
+                  return;
                 }
+
+                const svgAttrMap: Record<string, string> = {
+                  strokeWidth: 'stroke-width',
+                  fillRule: 'fill-rule',
+                  dominantBaseline: 'dominant-baseline',
+                  textAnchor: 'text-anchor',
+                };
+                const attrName = svgAttrMap[key] || key.replace(/([A-Z])/g, '-$1').toLowerCase();
+                element.setAttribute(attrName, String(value));
               } else {
                 // For HTML elements
-                if (key === 'class') {
+                if (key === 'style' && typeof value === 'object') {
+                  Object.keys(value).forEach(styleKey => {
+                    const styleVal = (value as any)[styleKey];
+                    if (styleVal && typeof styleVal === 'object' && typeof styleVal.get === 'function' && typeof styleVal.sub === 'function') {
+                      try { (element as any).style[styleKey] = String(styleVal.get()); } catch {}
+                      styleVal.sub((v: any) => { try { (element as any).style[styleKey] = String(v); } catch {} });
+                    } else {
+                      try { (element as any).style[styleKey] = String(styleVal); } catch {}
+                    }
+                  });
+                  return;
+                }
+                if (key === 'className') {
+                  (element as HTMLElement).className = String(value);
+                } else if (key === 'class') {
                   (element as HTMLElement).className = String(value);
                 } else if (key.startsWith('data-')) {
                   element.setAttribute(key, String(value));
@@ -209,6 +249,10 @@ export function setupMSFSGlobals(): void {
         // If it's a function (component), instantiate it
         if (typeof type === 'function') {
           const component = new type(props);
+          // Component refs: set ref.instance to the component instance
+          if (props && props.ref && typeof props.ref === 'object' && 'instance' in props.ref) {
+            props.ref.instance = component;
+          }
           const renderResult = component.render();
           if (renderResult) {
             return renderResult;

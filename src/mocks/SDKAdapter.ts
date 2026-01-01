@@ -29,14 +29,21 @@ export abstract class DisplayComponent<P = any, S = any> {
 }
 
 // Mock FSComponent
-// Use the global FSComponent that was set up by MSFSGlobals
-// This ensures JSX transformation and runtime use the same implementation
+// Use the global FSComponent that was set up by MSFSGlobals for runtime,
+// but provide a stable *typed* surface for TypeScript in tests.
+type FSComponentLike = {
+  buildComponent: (type: any, props: any, ...children: any[]) => any;
+  render: (vnode: any, container: HTMLElement) => void;
+  Fragment: (props: any, ...children: any[]) => any;
+  createRef: <T = any>() => { instance: T | null };
+};
+
 // Note: MSFSGlobals sets up FSComponent before this module is imported
-const globalFSComponent = (globalThis as any).FSComponent;
+const globalFSComponent = (globalThis as any).FSComponent as FSComponentLike | undefined;
 
 // Export the global FSComponent if available, otherwise use fallback
 // (This should not happen if setupTests.ts runs correctly)
-export const FSComponent = globalFSComponent || {
+export const FSComponent: FSComponentLike = globalFSComponent || {
   buildComponent: (type: any, props: any, ...children: any[]): any => {
     // If it's a string (HTML/SVG tag), create a VNode structure
     if (typeof type === 'string') {
@@ -74,14 +81,73 @@ export const FSComponent = globalFSComponent || {
 
           // For SVG elements, always use setAttribute
           if (element instanceof SVGElement) {
+            // Style support (including Subscribable values)
+            if (key === 'style' && typeof value === 'object') {
+              Object.keys(value).forEach(styleKey => {
+                const styleVal = (value as any)[styleKey];
+                // Subscribable-like: has get/sub
+                if (styleVal && typeof styleVal === 'object' && typeof styleVal.get === 'function' && typeof styleVal.sub === 'function') {
+                  try {
+                    (element as any).style[styleKey] = String(styleVal.get());
+                  } catch { /* ignore */ }
+                  styleVal.sub((v: any) => {
+                    try {
+                      (element as any).style[styleKey] = String(v);
+                    } catch { /* ignore */ }
+                  });
+                } else {
+                  try {
+                    (element as any).style[styleKey] = String(styleVal);
+                  } catch { /* ignore */ }
+                }
+              });
+              return;
+            }
+
+            // Normalize className -> class for SVG
+            if (key === 'className') {
+              element.setAttribute('class', String(value));
+              return;
+            }
             if (key === 'class') {
               element.setAttribute('class', String(value));
-            } else {
-              element.setAttribute(key, String(value));
+              return;
             }
+
+            // Normalize some common camelCase SVG attributes
+            const svgAttrMap: Record<string, string> = {
+              strokeWidth: 'stroke-width',
+              fillRule: 'fill-rule',
+              dominantBaseline: 'dominant-baseline',
+              textAnchor: 'text-anchor',
+            };
+            const attrName = svgAttrMap[key] || key.replace(/([A-Z])/g, '-$1').toLowerCase();
+            element.setAttribute(attrName, String(value));
           } else {
             // For HTML elements
-            if (key === 'class') {
+            if (key === 'style' && typeof value === 'object') {
+              Object.keys(value).forEach(styleKey => {
+                const styleVal = (value as any)[styleKey];
+                if (styleVal && typeof styleVal === 'object' && typeof styleVal.get === 'function' && typeof styleVal.sub === 'function') {
+                  try {
+                    (element as any).style[styleKey] = String(styleVal.get());
+                  } catch { /* ignore */ }
+                  styleVal.sub((v: any) => {
+                    try {
+                      (element as any).style[styleKey] = String(v);
+                    } catch { /* ignore */ }
+                  });
+                } else {
+                  try {
+                    (element as any).style[styleKey] = String(styleVal);
+                  } catch { /* ignore */ }
+                }
+              });
+              return;
+            }
+            if (key === 'className') {
+              (element as HTMLElement).className = String(value);
+            } else if (key === 'class') {
               (element as HTMLElement).className = String(value);
             } else if (key.startsWith('data-')) {
               element.setAttribute(key, String(value));
@@ -185,6 +251,10 @@ export const FSComponent = globalFSComponent || {
     // If it's a function (component), instantiate it
     if (typeof type === 'function') {
       const component = new type(props);
+      // If a ref was provided, set it to the component instance (component refs).
+      if (props && props.ref && typeof props.ref === 'object' && 'instance' in props.ref) {
+        props.ref.instance = component;
+      }
       const renderResult = component.render();
       if (renderResult) {
         return renderResult;
@@ -434,6 +504,46 @@ export class Subject<T> {
       }
     };
   }
+
+  /**
+   * Create a mapped Subscribable from this subject.
+   * Mimics MSFS SDK Subject.map() enough for UI binding tests.
+   */
+  map<M>(fn: (input: T, previousVal?: M) => M, _equalityFunc?: ((a: M, b: M) => boolean)): Subscribable<M> & Subscription {
+    return new MappedSubscribable<T, M>(this, fn);
+  }
+}
+
+class MappedSubscribable<T, M> implements Subscribable<M>, Subscription {
+  private subHandle?: { destroy: () => void };
+  private prev?: M;
+
+  constructor(private readonly source: Subscribable<T>, private readonly fn: (input: T, previousVal?: M) => M) {}
+
+  get(): M {
+    const next = this.fn(this.source.get(), this.prev);
+    this.prev = next;
+    return next;
+  }
+
+  sub(callback: (value: M) => void, immediate: boolean = false): { destroy: () => void } {
+    const handle = this.source.sub((v: T) => {
+      const mapped = this.fn(v, this.prev);
+      this.prev = mapped;
+      callback(mapped);
+    }, immediate);
+    this.subHandle = handle;
+    return { destroy: () => handle.destroy() };
+  }
+
+  map<N>(fn: (input: M, previousVal?: N) => N, _equalityFunc?: ((a: N, b: N) => boolean)): Subscribable<N> & Subscription {
+    return new MappedSubscribable<M, N>(this, fn);
+  }
+
+  destroy(): void {
+    this.subHandle?.destroy();
+    this.subHandle = undefined;
+  }
 }
 
 // Mock Subscribable interface
@@ -441,8 +551,196 @@ export class Subject<T> {
 export interface Subscribable<T> {
   get(): T;
   sub(callback: (value: T) => void, immediate?: boolean): { destroy: () => void };
-  map?<M>(fn: (input: T, previousVal?: M) => M, equalityFunc?: ((a: M, b: M) => boolean)): Subscribable<M>;
+  map<M>(fn: (input: T, previousVal?: M) => M, equalityFunc?: ((a: M, b: M) => boolean)): Subscribable<M> & Subscription;
 }
+
+// -----------------------------
+// Minimal math/unit primitives used by StormScopeMapManager/WeatherRadarWrapper
+// -----------------------------
+
+export type ReadonlyFloat64Array = Readonly<Float64Array>;
+
+export class NumberUnit<U = any> {
+  constructor(public readonly number: number, public readonly unit: U) {}
+  asUnit(_unit: any): number {
+    return this.number;
+  }
+}
+
+export class UnitTypeClass {
+  constructor(public readonly name: string) {}
+  createNumber(value: number): NumberUnit<UnitTypeClass> {
+    return new NumberUnit(value, this);
+  }
+}
+
+export const UnitType = {
+  NMILE: new UnitTypeClass('NMILE'),
+} as const;
+
+// In the real SDK, these are specialized Subjects. For testing, plain Subject is sufficient.
+export type NumberUnitSubject = Subject<NumberUnit<any>>;
+export const NumberUnitSubject = {
+  create: (initial: NumberUnit<any>): Subject<NumberUnit<any>> => Subject.create(initial),
+} as const;
+
+export const Vec2Math = {
+  create(x: number = 0, y: number = 0): Float64Array {
+    return new Float64Array([x, y]);
+  }
+};
+
+export type Vec2Subject = Subject<Float64Array>;
+export const Vec2Subject = {
+  create: (initial: Float64Array): Subject<Float64Array> => Subject.create(initial),
+} as const;
+
+// -----------------------------
+// Map-system stubs (msfs-sdk side)
+// -----------------------------
+
+export const MapSystemKeys = {
+  FacilityLoader: 'FacilityLoader',
+  Weather: 'Weather',
+  OwnAirplaneIcon: 'OwnAirplaneIcon',
+} as const;
+
+export class FacilityRepository {
+  static getRepository(_bus: any): any {
+    return {};
+  }
+}
+
+export class FacilityLoader {
+  constructor(_repo: any) {}
+}
+
+export class MapProjection {
+  project(_lla: { lat: number; lon: number }, out: Float64Array): Float64Array {
+    out[0] = 0.5;
+    out[1] = 0.5;
+    return out;
+  }
+}
+
+export class BingComponent {
+  static createEarthColorsArray(_waterColor: string, _stops: any[], _a: number, _b: number, _c: number): any[] {
+    return [];
+  }
+}
+
+export class MapIndexedRangeModule {
+  public readonly nominalRange = Subject.create(UnitType.NMILE.createNumber(100));
+}
+
+export class MapOwnAirplaneIconModule {}
+export class MapOwnAirplanePropsModule {}
+export class MapWxrModule {}
+export type CompiledMapSystem<T = any, U = any, V = any, W = any> = any;
+
+type ModelStore = Record<string, any>;
+
+class MockMapContext {
+  public readonly model = {
+    getModule: (key: string) => {
+      return (this._modules[key] ??= {});
+    },
+  };
+  public projection: MapProjection = new MapProjection();
+  public projectionChanged: Subject<void> = Subject.create<void>(undefined as any);
+  public bingRef = { instance: { setWxrColors: (_: any) => {}, wxrColors: Subject.create<any>([]) } };
+
+  constructor(public readonly bus: any, private readonly _modules: ModelStore, private readonly _controllers: Record<string, any>) {}
+
+  getController(key: string): any {
+    return this._controllers[key];
+  }
+}
+
+class MockMapSystemBuilder {
+  private modules: ModelStore = {};
+  private controllers: Record<string, any> = {};
+  private rangeValues: any[] = [];
+
+  constructor(private readonly bus: any) {}
+
+  withContext(_key: any, _factory: any): this { return this; }
+  withModule(key: any, factory: any): this {
+    // create module instance eagerly
+    this.modules[String(key)] = factory();
+    return this;
+  }
+
+  with(_token: any, maybeRangeArray?: any): this {
+    // Special-case range arrays: passed as second arg by StormScopeMapManager via GarminMapBuilder.range
+    if (Array.isArray(maybeRangeArray)) {
+      this.rangeValues = maybeRangeArray;
+      // ensure Range module has nominalRange
+      if (!this.modules['Range']) {
+        this.modules['Range'] = new MapIndexedRangeModule();
+      }
+    }
+    return this;
+  }
+
+  withInit(_name: string, init: any): this {
+    // run init later at build time
+    this._inits.push(init);
+    return this;
+  }
+  private _inits: any[] = [];
+
+  withBing(_bingId: string, _opts?: any): this { return this; }
+  withOwnAirplanePropBindings(_bindings: any, _hz: number): this { return this; }
+  withFollowAirplane(): this { return this; }
+  withController(key: any, factory: any): this {
+    this.controllers[String(key)] = factory({ model: this.modules, bus: this.bus });
+    return this;
+  }
+  withProjectedSize(_size: any): this { return this; }
+
+  build(mapId: string): any {
+    // Ensure Range module shape expected by StormScopeMapManager
+    if (!this.modules['Range']) {
+      this.modules['Range'] = new MapIndexedRangeModule();
+    }
+    const rangeModule = this.modules['Range'];
+    if (rangeModule && !rangeModule.nominalRange) {
+      (rangeModule as any).nominalRange = Subject.create(UnitType.NMILE.createNumber(100));
+    }
+
+    // Provide a default Range controller if not present
+    if (!this.controllers['Range']) {
+      // Lazy require to avoid circular import
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { MapRangeController } = require('@microsoft/msfs-garminsdk');
+        this.controllers['Range'] = new MapRangeController(this.rangeValues, rangeModule.nominalRange);
+      } catch {
+        this.controllers['Range'] = { changeRangeIndex: () => {}, setRangeIndex: () => {} };
+      }
+    }
+
+    const context = new MockMapContext(this.bus, this.modules, this.controllers);
+    // Run init hooks with a context-like object
+    this._inits.forEach(fn => {
+      try {
+        fn({ bus: this.bus, model: { getModule: (k: any) => this.modules[String(k)] }, getController: (k: any) => this.controllers[String(k)], ...(context as any) });
+      } catch { /* ignore */ }
+    });
+
+    const mapVNode = FSComponent.buildComponent('div', { id: mapId, class: 'stormscope-map' });
+    const ref = { instance: { update: (_t?: any) => {}, wake: () => {}, sleep: () => {} } };
+    return { context, map: mapVNode, ref };
+  }
+}
+
+export const MapSystemBuilder: any = {
+  create: (bus: any): any => new MockMapSystemBuilder(bus),
+};
+
+// Utility namespace placeholder used by some code imports
+export const SubscribableUtils = {} as any;
 
 // Mock EventBus
 export class EventBus {
