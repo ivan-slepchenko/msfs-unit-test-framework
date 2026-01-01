@@ -31,28 +31,41 @@ describe('AircraftSymbol Component', () => {
       expect(element.id).toBe('aircraft-symbol');
     });
 
-    test('should render horizontal and vertical lines', () => {
+    test('should render fuselage, wings, and tail lines', () => {
       helper.renderComponent(AircraftSymbol, {
         viewMode: viewModeSubject
       });
 
-      const lines = helper.querySelectorAllSVG('line.aircraft-line');
-      expect(lines.length).toBe(2);
-    });
-
-    test('should render center circle', () => {
-      helper.renderComponent(AircraftSymbol, {
-        viewMode: viewModeSubject
-      });
-
-      const circle = helper.querySelectorSVG('circle.aircraft-center');
-      expect(circle).toBeTruthy();
-      expect(parseFloat(circle?.getAttribute('r') || '0')).toBe(3);
+      const fuselage = helper.querySelectorSVG('line.aircraft-fuselage');
+      const wings = helper.querySelectorSVG('line.aircraft-wings');
+      const tail = helper.querySelectorSVG('line.aircraft-tail');
+      
+      expect(fuselage).toBeTruthy();
+      expect(wings).toBeTruthy();
+      expect(tail).toBeTruthy();
+      
+      // Check fuselage (vertical line)
+      expect(parseFloat(fuselage?.getAttribute('x1') || '0')).toBe(30);
+      expect(parseFloat(fuselage?.getAttribute('x2') || '0')).toBe(30);
+      expect(parseFloat(fuselage?.getAttribute('y1') || '0')).toBe(10);
+      expect(parseFloat(fuselage?.getAttribute('y2') || '0')).toBe(50);
+      
+      // Check wings (horizontal line)
+      expect(parseFloat(wings?.getAttribute('x1') || '0')).toBe(13);
+      expect(parseFloat(wings?.getAttribute('x2') || '0')).toBe(47);
+      expect(parseFloat(wings?.getAttribute('y1') || '0')).toBe(24);
+      expect(parseFloat(wings?.getAttribute('y2') || '0')).toBe(24);
+      
+      // Check tail (horizontal line)
+      expect(parseFloat(tail?.getAttribute('x1') || '0')).toBe(20);
+      expect(parseFloat(tail?.getAttribute('x2') || '0')).toBe(40);
+      expect(parseFloat(tail?.getAttribute('y1') || '0')).toBe(44);
+      expect(parseFloat(tail?.getAttribute('y2') || '0')).toBe(44);
     });
   });
 
   describe('Positioning', () => {
-    test('should be centered at (200, 200)', () => {
+    test('should be centered at display center (384, 384)', () => {
       helper.renderComponent(AircraftSymbol, {
         viewMode: viewModeSubject
       });
@@ -61,57 +74,45 @@ describe('AircraftSymbol Component', () => {
       expect(symbol).toBeTruthy();
       
       const transform = symbol?.getAttribute('transform');
-      expect(transform).toContain('translate(200, 200)');
+      expect(transform).toContain('translate(384, 384)');
     });
 
-    test('should have correct line positions', () => {
+    test('should update position based on view mode', async () => {
+      viewModeSubject.set('360');
+      
       helper.renderComponent(AircraftSymbol, {
         viewMode: viewModeSubject
       });
 
-      const lines = helper.querySelectorAllSVG('line.aircraft-line');
-      expect(lines.length).toBe(2);
+      await helper.waitForUpdate(50);
+      
+      let symbol = helper.querySelectorSVG('#aircraft-symbol');
+      let transform = symbol?.getAttribute('transform') || '';
+      expect(transform).toContain('translate(384, 384)');
 
-      // Check horizontal line
-      const horizontalLine = Array.from(lines).find(line => 
-        parseFloat(line.getAttribute('x1') || '0') === -10
-      );
-      expect(horizontalLine).toBeTruthy();
-      expect(parseFloat(horizontalLine?.getAttribute('x2') || '0')).toBe(10);
-      expect(parseFloat(horizontalLine?.getAttribute('y1') || '0')).toBe(0);
-      expect(parseFloat(horizontalLine?.getAttribute('y2') || '0')).toBe(0);
-
-      // Check vertical line
-      const verticalLine = Array.from(lines).find(line => 
-        parseFloat(line.getAttribute('y1') || '0') === -10
-      );
-      expect(verticalLine).toBeTruthy();
-      expect(parseFloat(verticalLine?.getAttribute('y2') || '0')).toBe(10);
-      expect(parseFloat(verticalLine?.getAttribute('x1') || '0')).toBe(0);
-      expect(parseFloat(verticalLine?.getAttribute('x2') || '0')).toBe(0);
+      // Change to 120 mode
+      viewModeSubject.set('120');
+      await helper.waitForUpdate(50);
+      
+      symbol = helper.querySelectorSVG('#aircraft-symbol');
+      transform = symbol?.getAttribute('transform') || '';
+      expect(transform).toContain('translate(384, 647)');
     });
   });
 
   describe('Styling', () => {
-    test('should apply correct stroke color', () => {
+    test('should apply correct stroke styling', () => {
       helper.renderComponent(AircraftSymbol, {
         viewMode: viewModeSubject
       });
 
-      const lines = helper.querySelectorAllSVG('line.aircraft-line');
-      lines.forEach(line => {
-        expect(line.getAttribute('stroke')).toBe('#00FF00');
-        expect(parseFloat(line.getAttribute('stroke-width') || '0')).toBe(2);
-      });
-    });
-
-    test('should apply correct fill color to circle', () => {
-      helper.renderComponent(AircraftSymbol, {
-        viewMode: viewModeSubject
-      });
-
-      const circle = helper.querySelectorSVG('circle.aircraft-center');
-      expect(circle?.getAttribute('fill')).toBe('#00FF00');
+      const symbol = helper.querySelectorSVG('#aircraft-symbol');
+      expect(symbol).toBeTruthy();
+      
+      // The stroke and stroke-width are set on the group element
+      expect(symbol?.getAttribute('stroke')).toBe('var(--stormscope-green)');
+      expect(symbol?.getAttribute('stroke-width')).toBe('var(--stormscope-stroke-width)');
+      expect(symbol?.getAttribute('fill')).toBe('none');
     });
   });
 });

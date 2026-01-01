@@ -34,35 +34,21 @@ describe('HeadingIndicator Component', () => {
       expect(element.id).toBe('heading-indicator');
     });
 
-    test('should render outer ring', () => {
+    test('should render 8 T-shaped azimuth markers', () => {
       helper.renderComponent(HeadingIndicator, {
         heading: headingSubject,
         viewMode: viewModeSubject
       });
 
-      const ring = helper.querySelectorSVG('circle.heading-ring');
-      expect(ring).toBeTruthy();
-      expect(parseFloat(ring?.getAttribute('r') || '0')).toBe(190);
-    });
-
-    test('should render 8 azimuth markers', () => {
-      helper.renderComponent(HeadingIndicator, {
-        heading: headingSubject,
-        viewMode: viewModeSubject
+      // The component renders groups with class "azimuth-marker"
+      const markerGroups = helper.querySelectorAllSVG('g.azimuth-marker');
+      expect(markerGroups.length).toBe(8);
+      
+      // Each group should contain 2 lines (leg and cap of the T)
+      markerGroups.forEach(group => {
+        const lines = group.querySelectorAll('line');
+        expect(lines.length).toBe(2);
       });
-
-      const markers = helper.querySelectorAllSVG('line.azimuth-marker');
-      expect(markers.length).toBe(8);
-    });
-
-    test('should render heading arrow', () => {
-      helper.renderComponent(HeadingIndicator, {
-        heading: headingSubject,
-        viewMode: viewModeSubject
-      });
-
-      const arrow = helper.querySelectorSVG('polygon.heading-arrow');
-      expect(arrow).toBeTruthy();
     });
   });
 
@@ -123,65 +109,47 @@ describe('HeadingIndicator Component', () => {
   });
 
   describe('Heading Updates', () => {
-    test('should update arrow position when heading changes', async () => {
-      headingSubject.set(0); // North
-      
+    test('should render markers at correct bearings', () => {
       helper.renderComponent(HeadingIndicator, {
         heading: headingSubject,
         viewMode: viewModeSubject
       });
 
-      await helper.waitForUpdate(50);
-
-      let arrow = helper.querySelectorSVG('#heading-arrow');
-      let transform = arrow?.getAttribute('transform') || '';
-      expect(transform).toContain('rotate(0)');
-
-      // Change heading to 90° (East)
-      headingSubject.set(90);
-      await helper.waitForUpdate(50);
-
-      arrow = helper.querySelectorSVG('#heading-arrow');
-      transform = arrow?.getAttribute('transform') || '';
-      expect(transform).toContain('rotate(90)');
-    });
-
-    test('should position arrow correctly for different headings', async () => {
-      headingSubject.set(45);
+      // The component renders markers at bearings: 30, 60, 90, 120, 240, 270, 300, 330
+      // (skipping 0, 150, 180, 210)
+      const expectedBearings = [30, 60, 90, 120, 240, 270, 300, 330];
+      const markerGroups = helper.querySelectorAllSVG('g.azimuth-marker');
       
-      helper.renderComponent(HeadingIndicator, {
-        heading: headingSubject,
-        viewMode: viewModeSubject
+      expect(markerGroups.length).toBe(8);
+      
+      expectedBearings.forEach(bearing => {
+        const marker = Array.from(markerGroups).find(m => 
+          m.getAttribute('data-bearing') === bearing.toString()
+        );
+        expect(marker).toBeTruthy();
       });
-
-      await helper.waitForUpdate(50);
-
-      const arrow = helper.querySelectorSVG('#heading-arrow');
-      const transform = arrow?.getAttribute('transform') || '';
-      
-      // Should contain translate with calculated position and rotation
-      expect(transform).toContain('translate(');
-      expect(transform).toContain('rotate(45)');
     });
   });
 
   describe('Azimuth Markers', () => {
-    test('should have markers at correct bearings', () => {
+    test('should have T-shaped markers with correct structure', () => {
       helper.renderComponent(HeadingIndicator, {
         heading: headingSubject,
         viewMode: viewModeSubject
       });
 
-      const expectedBearings = [0, 45, 90, 135, 180, 225, 270, 315];
-      const markers = helper.querySelectorAllSVG('line.azimuth-marker');
+      const markerGroups = helper.querySelectorAllSVG('g.azimuth-marker');
+      expect(markerGroups.length).toBe(8);
       
-      expect(markers.length).toBe(8);
-      
-      expectedBearings.forEach(bearing => {
-        const marker = Array.from(markers).find(m => 
-          m.getAttribute('data-bearing') === bearing.toString()
-        );
-        expect(marker).toBeTruthy();
+      // Check that each marker has the correct T-shape structure
+      markerGroups.forEach(group => {
+        const lines = group.querySelectorAll('line');
+        expect(lines.length).toBe(2); // Leg and cap
+        
+        // Check that transform contains translate and rotate
+        const transform = group.getAttribute('transform') || '';
+        expect(transform).toContain('translate(');
+        expect(transform).toContain('rotate(');
       });
     });
   });

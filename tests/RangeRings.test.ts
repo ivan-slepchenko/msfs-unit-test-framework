@@ -77,63 +77,71 @@ describe('RangeRings Component', () => {
       expect(element.id).toBe('range-rings');
     });
 
-    test('should render all rings up to current range', async () => {
+    test('should render single 25nm ring', async () => {
       await renderAndWait({
         currentRange: currentRangeSubject,
         viewMode: viewModeSubject
       });
 
-      // Should render rings for 25, 50, 100 (3 rings)
+      // Component renders a single 25nm ring that scales
       const rings = getVisibleRings();
-      expect(rings.length).toBe(3);
+      expect(rings.length).toBe(1);
+      
+      const ring = rings[0] as SVGCircleElement;
+      expect(ring).toBeTruthy();
+      expect(ring.classList.contains('range-ring')).toBe(true);
     });
 
-    test('should render only active ring label', async () => {
-      currentRangeSubject.set(50);
+    test('should render label for 25nm ring', async () => {
       await renderAndWait({
         currentRange: currentRangeSubject,
         viewMode: viewModeSubject
       });
 
-      // Should have 2 rings (25, 50) but only 1 label (for 50)
-      const rings = getVisibleRings();
       const labels = getVisibleLabels();
-      
-      expect(rings.length).toBe(2);
       expect(labels.length).toBe(1);
       
       const label = labels[0] as SVGTextElement;
-      expect(label.textContent).toBe('50');
+      expect(label.textContent).toBe('25');
+      expect(label.classList.contains('range-label')).toBe(true);
     });
   });
 
   describe('Observable Updates', () => {
-    test('should update rings when currentRange observable changes', async () => {
+    test('should update ring radius when currentRange observable changes', async () => {
       const { component } = await renderAndWait({
         currentRange: currentRangeSubject,
         viewMode: viewModeSubject
       });
 
-      // Initially should show 3 rings (25, 50, 100)
+      // Initially should show 1 ring (25nm ring)
       let rings = getVisibleRings();
-      expect(rings.length).toBe(3);
+      expect(rings.length).toBe(1);
 
-      // Change range to 200 - should show all 4 rings
+      // Change range to 200 - still 1 ring, but radius changes
       currentRangeSubject.set(200);
       await helper.waitForUpdate();
 
       rings = getVisibleRings();
-      expect(rings.length).toBe(4);
+      expect(rings.length).toBe(1);
+      
+      // Ring should be smaller at 200 nmi range
+      const ring = rings[0] as SVGCircleElement;
+      const radius200 = parseFloat(ring.getAttribute('r') || '0');
+      expect(radius200).toBeCloseTo(40, 1); // 25/200 * 320 = 40
 
-      // Change range to 25 - should show only 1 ring
+      // Change range to 25 - still 1 ring, but at full radius
       currentRangeSubject.set(25);
       await helper.waitForUpdate();
 
       rings = getVisibleRings();
       expect(rings.length).toBe(1);
+      
+      const radius25 = parseFloat(rings[0].getAttribute('r') || '0');
+      expect(radius25).toBeCloseTo(320, 1); // 25/25 * 320 = 320 (full radius)
     });
 
-    test('should update ring radii when range changes', async () => {
+    test('should update ring radius when range changes', async () => {
       await renderAndWait({
         currentRange: currentRangeSubject,
         viewMode: viewModeSubject
@@ -143,31 +151,27 @@ describe('RangeRings Component', () => {
       currentRangeSubject.set(100);
       await helper.waitForUpdate();
 
-      const ring25 = helper.querySelectorSVG('circle[data-range="25"]') as SVGCircleElement;
-      const ring100 = helper.querySelectorSVG('circle[data-range="100"]') as SVGCircleElement;
+      const ring = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
+      const radius25_100 = parseFloat(ring.getAttribute('r') || '0');
       
-      const radius25_100 = parseFloat(ring25.getAttribute('r') || '0');
-      const radius100_100 = parseFloat(ring100.getAttribute('r') || '0');
-      
-      // At 100 nmi range: 25 nmi ring should be at 25% of display radius
-      expect(radius25_100).toBeCloseTo(45, 1);
-      // 100 nmi ring should be at full display radius
-      expect(radius100_100).toBeCloseTo(180, 1);
+      // At 100 nmi range: 25 nmi ring should be at 25% of display radius (80)
+      // DISPLAY_RADIUS is 320, so 25/100 * 320 = 80
+      expect(radius25_100).toBeCloseTo(80, 1);
 
       // Change range to 200
       currentRangeSubject.set(200);
       await helper.waitForUpdate();
 
-      const ring25_200 = helper.querySelectorSVG('circle[data-range="25"]') as SVGCircleElement;
-      const radius25_200 = parseFloat(ring25_200.getAttribute('r') || '0');
+      const radius25_200 = parseFloat(ring.getAttribute('r') || '0');
       
-      // At 200 nmi range: 25 nmi ring should be at 12.5% of display radius
-      expect(radius25_200).toBeCloseTo(22.5, 1);
+      // At 200 nmi range: 25 nmi ring should be at 12.5% of display radius (40)
+      // 25/200 * 320 = 40
+      expect(radius25_200).toBeCloseTo(40, 1);
       // Should be smaller than at 100 nmi range
       expect(radius25_200).toBeLessThan(radius25_100);
     });
 
-    test('should update active ring styling when range changes', async () => {
+    test('should update label position when range changes', async () => {
       await renderAndWait({
         currentRange: currentRangeSubject,
         viewMode: viewModeSubject
@@ -177,51 +181,28 @@ describe('RangeRings Component', () => {
       currentRangeSubject.set(50);
       await helper.waitForUpdate();
 
-      const activeRing50 = helper.querySelectorSVG('circle[data-range="50"]') as SVGCircleElement;
-      expect(activeRing50.getAttribute('stroke')).toBe('#00FF00');
-      expect(activeRing50.getAttribute('stroke-width')).toBe('2');
+      const label = helper.querySelectorSVG('text.range-label') as SVGTextElement;
+      expect(label).toBeTruthy();
+      expect(label.textContent).toBe('25');
+      expect(label.style.display).not.toBe('none');
+      
+      const yBefore = parseFloat(label.getAttribute('y') || '0');
+      // At 50 nmi: label at centerY + radius (384 + 160 = 544)
+      expect(yBefore).toBeCloseTo(544, 1);
 
-      // Change range to 100
+      // Change range to 100 - label should move (ring is smaller)
       currentRangeSubject.set(100);
       await helper.waitForUpdate();
 
-      // 50 should no longer be active
-      const inactiveRing50 = helper.querySelectorSVG('circle[data-range="50"]') as SVGCircleElement;
-      expect(inactiveRing50.getAttribute('stroke')).toBe('#006600');
-      expect(inactiveRing50.getAttribute('stroke-width')).toBe('1');
-
-      // 100 should now be active
-      const activeRing100 = helper.querySelectorSVG('circle[data-range="100"]') as SVGCircleElement;
-      expect(activeRing100.getAttribute('stroke')).toBe('#00FF00');
-      expect(activeRing100.getAttribute('stroke-width')).toBe('2');
-    });
-
-    test('should update label visibility when range changes', async () => {
-      await renderAndWait({
-        currentRange: currentRangeSubject,
-        viewMode: viewModeSubject
-      });
-
-      // Set range to 50
-      currentRangeSubject.set(50);
-      await helper.waitForUpdate();
-
-      const label50 = helper.querySelectorSVG('text[data-range="50"]') as SVGTextElement;
-      expect(label50.style.display).not.toBe('none');
-      expect(label50.textContent).toBe('50');
-
-      // Change range to 100
-      currentRangeSubject.set(100);
-      await helper.waitForUpdate();
-
-      // 50 label should be hidden
-      const label50_hidden = helper.querySelectorSVG('text[data-range="50"]') as SVGTextElement;
-      expect(label50_hidden.style.display).toBe('none');
-
-      // 100 label should be visible
-      const label100 = helper.querySelectorSVG('text[data-range="100"]') as SVGTextElement;
-      expect(label100.style.display).not.toBe('none');
-      expect(label100.textContent).toBe('100');
+      const labelAfter = helper.querySelectorSVG('text.range-label') as SVGTextElement;
+      expect(labelAfter).toBeTruthy();
+      expect(labelAfter.textContent).toBe('25');
+      
+      // Y position should change as ring radius changes
+      const yAfter = parseFloat(labelAfter.getAttribute('y') || '0');
+      // At 100 nmi: label at centerY + radius (384 + 80 = 464)
+      expect(yAfter).toBeCloseTo(464, 1);
+      expect(yAfter).toBeLessThan(yBefore);
     });
   });
 
@@ -233,9 +214,10 @@ describe('RangeRings Component', () => {
         viewMode: viewModeSubject
       });
 
-      const ring = helper.querySelectorSVG('circle[data-range="25"]') as SVGCircleElement;
+      const ring = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
       expect(ring).toBeTruthy();
-      expect(parseFloat(ring.getAttribute('r') || '0')).toBeCloseTo(180, 1); // Full radius
+      // At 25 nmi range: 25 nmi ring should be at full display radius (320)
+      expect(parseFloat(ring.getAttribute('r') || '0')).toBeCloseTo(320, 1);
     });
 
     test('should scale ring radius correctly for 50 nmi range', async () => {
@@ -245,19 +227,13 @@ describe('RangeRings Component', () => {
         viewMode: viewModeSubject
       });
 
-      const ring25 = helper.querySelector('circle[data-range="25"]') as SVGCircleElement;
-      const ring50 = helper.querySelector('circle[data-range="50"]') as SVGCircleElement;
+      const ring = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
+      expect(ring).toBeTruthy();
       
-      expect(ring25).toBeTruthy();
-      expect(ring50).toBeTruthy();
-      
-      const radius25 = parseFloat(ring25.getAttribute('r') || '0');
-      const radius50 = parseFloat(ring50.getAttribute('r') || '0');
-      
+      const radius = parseFloat(ring.getAttribute('r') || '0');
       // 25 nmi ring should be at 50% of display radius when range is 50 nmi
-      expect(radius25).toBeCloseTo(90, 1);
-      // 50 nmi ring should be at full display radius
-      expect(radius50).toBeCloseTo(180, 1);
+      // 25/50 * 320 = 160
+      expect(radius).toBeCloseTo(160, 1);
     });
 
     test('should scale ring radius correctly for 100 nmi range', async () => {
@@ -267,16 +243,12 @@ describe('RangeRings Component', () => {
         viewMode: viewModeSubject
       });
 
-      const ring25 = helper.querySelector('circle[data-range="25"]') as SVGCircleElement;
-      const ring100 = helper.querySelector('circle[data-range="100"]') as SVGCircleElement;
+      const ring = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
       
-      const radius25 = parseFloat(ring25.getAttribute('r') || '0');
-      const radius100 = parseFloat(ring100.getAttribute('r') || '0');
-      
+      const radius = parseFloat(ring.getAttribute('r') || '0');
       // 25 nmi ring should be at 25% of display radius when range is 100 nmi
-      expect(radius25).toBeCloseTo(45, 1);
-      // 100 nmi ring should be at full display radius
-      expect(radius100).toBeCloseTo(180, 1);
+      // 25/100 * 320 = 80
+      expect(radius).toBeCloseTo(80, 1);
     });
 
     test('should scale ring radius correctly for 200 nmi range', async () => {
@@ -286,37 +258,30 @@ describe('RangeRings Component', () => {
         viewMode: viewModeSubject
       });
 
-      const ring25 = helper.querySelector('circle[data-range="25"]') as SVGCircleElement;
-      const ring200 = helper.querySelector('circle[data-range="200"]') as SVGCircleElement;
+      const ring = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
       
-      const radius25 = parseFloat(ring25.getAttribute('r') || '0');
-      const radius200 = parseFloat(ring200.getAttribute('r') || '0');
-      
+      const radius = parseFloat(ring.getAttribute('r') || '0');
       // 25 nmi ring should be at 12.5% of display radius when range is 200 nmi
-      expect(radius25).toBeCloseTo(22.5, 1);
-      // 200 nmi ring should be at full display radius
-      expect(radius200).toBeCloseTo(180, 1);
+      // 25/200 * 320 = 40
+      expect(radius).toBeCloseTo(40, 1);
     });
   });
 
   describe('Styling', () => {
-    test('should apply active styling to current range ring', async () => {
+    test('should apply correct styling to ring', async () => {
       currentRangeSubject.set(50);
       await renderAndWait({
         currentRange: currentRangeSubject,
         viewMode: viewModeSubject
       });
 
-      const activeRing = helper.querySelectorSVG('circle[data-range="50"]') as SVGCircleElement;
-      const inactiveRing = helper.querySelectorSVG('circle[data-range="25"]') as SVGCircleElement;
+      const ring = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
+      expect(ring).toBeTruthy();
       
-      expect(activeRing.getAttribute('stroke')).toBe('#00FF00');
-      expect(activeRing.getAttribute('stroke-width')).toBe('2');
-      expect(parseFloat(activeRing.getAttribute('opacity') || '0')).toBe(1);
-      
-      expect(inactiveRing.getAttribute('stroke')).toBe('#006600');
-      expect(inactiveRing.getAttribute('stroke-width')).toBe('1');
-      expect(parseFloat(inactiveRing.getAttribute('opacity') || '0')).toBe(0.5);
+      // Ring uses CSS variables for styling
+      expect(ring.getAttribute('stroke')).toBe('var(--stormscope-green)');
+      expect(ring.getAttribute('stroke-width')).toBe('var(--stormscope-stroke-width)');
+      expect(ring.getAttribute('fill')).toBe('none');
     });
   });
 
@@ -348,20 +313,25 @@ describe('RangeRings Component', () => {
   });
 
   describe('Edge Cases', () => {
-    test('should handle invalid range gracefully', async () => {
-      // Range not in the list (e.g., 75)
+    test('should handle any range value gracefully', async () => {
+      // Range not in the standard list (e.g., 75)
       currentRangeSubject.set(75);
       await renderAndWait({
         currentRange: currentRangeSubject,
         viewMode: viewModeSubject
       });
 
-      // Should still render rings (defaults to showing all)
-      const rings = helper.querySelectorAll('circle.range-ring');
-      expect(rings.length).toBe(4); // All 4 rings
+      // Should still render the single ring
+      const rings = helper.querySelectorAllSVG('circle.range-ring');
+      expect(rings.length).toBe(1);
+      
+      const ring = rings[0] as SVGCircleElement;
+      // At 75 nmi range: 25 nmi ring should be at 25/75 * 320 = 106.67
+      const radius = parseFloat(ring.getAttribute('r') || '0');
+      expect(radius).toBeCloseTo(106.67, 1);
     });
 
-    test('should center rings correctly', async () => {
+    test('should center ring correctly', async () => {
       await renderAndWait({
         currentRange: currentRangeSubject,
         viewMode: viewModeSubject
@@ -369,8 +339,9 @@ describe('RangeRings Component', () => {
 
       const ring = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
       expect(ring).toBeTruthy();
-      expect(parseFloat(ring.getAttribute('cx') || '0')).toBe(200);
-      expect(parseFloat(ring.getAttribute('cy') || '0')).toBe(200);
+      // DISPLAY_CENTER_X = 384, DISPLAY_CENTER_Y = 384
+      expect(parseFloat(ring.getAttribute('cx') || '0')).toBe(384);
+      expect(parseFloat(ring.getAttribute('cy') || '0')).toBe(384);
     });
 
     test('should handle rapid range changes', async () => {
@@ -389,9 +360,13 @@ describe('RangeRings Component', () => {
       currentRangeSubject.set(200);
       await helper.waitForUpdate();
 
-      // Should show all 4 rings at 200 nmi
+      // Should still show 1 ring at 200 nmi
       const rings = helper.querySelectorAllSVG('circle.range-ring');
-      expect(rings.length).toBe(4);
+      expect(rings.length).toBe(1);
+      
+      const ring = rings[0] as SVGCircleElement;
+      const radius = parseFloat(ring.getAttribute('r') || '0');
+      expect(radius).toBeCloseTo(40, 1); // 25/200 * 320 = 40
     });
   });
 
@@ -406,15 +381,17 @@ describe('RangeRings Component', () => {
       expect(component).toBeTruthy();
       
       // Change range - should trigger update
-      const initialRings = getVisibleRings();
-      const initialCount = initialRings.length;
+      const initialRing = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
+      const initialRadius = parseFloat(initialRing.getAttribute('r') || '0');
       
       currentRangeSubject.set(200);
       await helper.waitForUpdate();
       
-      // Should have updated (more rings visible)
-      const updatedRings = getVisibleRings();
-      expect(updatedRings.length).toBeGreaterThan(initialCount);
+      // Should have updated (radius changed)
+      const updatedRing = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
+      const updatedRadius = parseFloat(updatedRing.getAttribute('r') || '0');
+      expect(updatedRadius).not.toBe(initialRadius);
+      expect(updatedRadius).toBeLessThan(initialRadius);
     });
 
     test('should update DOM directly via refs (not re-render)', async () => {
@@ -427,19 +404,19 @@ describe('RangeRings Component', () => {
       await helper.waitForUpdate(); // Wait for initial subscription
 
       // Get initial ring element
-      const ring100 = helper.querySelectorSVG('circle[data-range="100"]') as SVGCircleElement;
-      const initialRadius = parseFloat(ring100.getAttribute('r') || '0');
+      const ring = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
+      const initialRadius = parseFloat(ring.getAttribute('r') || '0');
       
       // Change range - should update same element, not create new one
       currentRangeSubject.set(200);
       await helper.waitForUpdate();
       
       // Should be the same DOM element (not re-rendered)
-      const ring100After = helper.querySelectorSVG('circle[data-range="100"]') as SVGCircleElement;
-      expect(ring100After).toBe(ring100); // Same element reference
+      const ringAfter = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
+      expect(ringAfter).toBe(ring); // Same element reference
       
       // But radius should have changed
-      const newRadius = parseFloat(ring100After.getAttribute('r') || '0');
+      const newRadius = parseFloat(ringAfter.getAttribute('r') || '0');
       expect(newRadius).not.toBe(initialRadius);
       expect(newRadius).toBeLessThan(initialRadius); // Smaller at 200 nmi range
     });
@@ -453,19 +430,19 @@ describe('RangeRings Component', () => {
       });
       await helper.waitForUpdate(); // Wait for initial subscription
       
-      const label100 = helper.querySelectorSVG('text[data-range="100"]') as SVGTextElement;
-      const initialX = parseFloat(label100.getAttribute('x') || '0');
+      const label = helper.querySelectorSVG('text.range-label') as SVGTextElement;
+      const initialY = parseFloat(label.getAttribute('y') || '0');
       
       // Change range to 200 - label should move (ring is smaller)
       currentRangeSubject.set(200);
       await helper.waitForUpdate();
       
-      const label100After = helper.querySelectorSVG('text[data-range="100"]') as SVGTextElement;
-      const newX = parseFloat(label100After.getAttribute('x') || '0');
+      const labelAfter = helper.querySelectorSVG('text.range-label') as SVGTextElement;
+      const newY = parseFloat(labelAfter.getAttribute('y') || '0');
       
-      // X position should have changed (ring radius changed)
-      expect(newX).not.toBe(initialX);
-      expect(newX).toBeLessThan(initialX); // Smaller ring = label closer to center
+      // Y position should have changed (ring radius changed, label moves closer to center)
+      expect(newY).not.toBe(initialY);
+      expect(newY).toBeLessThan(initialY); // Smaller ring = label closer to center
     });
 
     test('should properly destroy subscriptions on component destroy', async () => {
@@ -492,38 +469,45 @@ describe('RangeRings Component', () => {
         viewMode: viewModeSubject
       });
 
-      // Rings should be visible in both modes
+      // Ring should be visible in both modes
       viewModeSubject.set('120');
       await helper.waitForUpdate();
       
       const ringsForward = helper.querySelectorAllSVG('circle.range-ring');
-      expect(ringsForward.length).toBeGreaterThan(0);
+      expect(ringsForward.length).toBe(1);
       
       viewModeSubject.set('360');
       await helper.waitForUpdate();
       
       const rings360 = helper.querySelectorAllSVG('circle.range-ring');
-      expect(rings360.length).toBeGreaterThan(0);
+      expect(rings360.length).toBe(1);
     });
   });
 
   describe('Ref-based DOM Manipulation', () => {
-    test('should initialize all ring refs on render', async () => {
+    test('should initialize refs on render', async () => {
       const { component } = await renderAndWait({
         currentRange: currentRangeSubject,
         viewMode: viewModeSubject
       });
 
-      // All 4 rings should have refs initialized
-      const rings = helper.querySelectorAllSVG('circle.range-ring');
-      expect(rings.length).toBe(4); // All 4 rings rendered
+      // Component has refs: circleRef, arcRef, textRef, textBgRef
+      expect((component as any).circleRef).toBeTruthy();
+      expect((component as any).circleRef.instance).toBeTruthy();
+      expect((component as any).arcRef).toBeTruthy();
+      expect((component as any).textRef).toBeTruthy();
+      expect((component as any).textRef.instance).toBeTruthy();
+      expect((component as any).textBgRef).toBeTruthy();
       
-      // Each ring should have a corresponding text element
+      // Single ring and label should be rendered
+      const rings = helper.querySelectorAllSVG('circle.range-ring');
+      expect(rings.length).toBe(1);
+      
       const labels = helper.querySelectorAllSVG('text.range-label');
-      expect(labels.length).toBe(4); // All 4 labels rendered
+      expect(labels.length).toBe(1);
     });
 
-    test('should update rings when observable changes (observable pattern)', async () => {
+    test('should update ring when observable changes (observable pattern)', async () => {
       // Start with range 100
       currentRangeSubject.set(100);
       await renderAndWait({
@@ -532,29 +516,24 @@ describe('RangeRings Component', () => {
       });
       await helper.waitForUpdate();
 
-      // Initially should show 3 rings (25, 50, 100) - verify by checking they're not hidden
-      const ring25 = helper.querySelectorSVG('circle[data-range="25"]') as SVGCircleElement;
-      const ring50 = helper.querySelectorSVG('circle[data-range="50"]') as SVGCircleElement;
-      const ring100 = helper.querySelectorSVG('circle[data-range="100"]') as SVGCircleElement;
+      // Should show 1 ring
+      const ring = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
+      expect(ring).toBeTruthy();
+      const initialRadius = parseFloat(ring.getAttribute('r') || '0');
+      expect(initialRadius).toBeCloseTo(80, 1); // 25/100 * 320 = 80
       
-      expect(ring25).toBeTruthy();
-      expect(ring50).toBeTruthy();
-      expect(ring100).toBeTruthy();
-      
-      // Change to 200 - should show all 4 rings
+      // Change to 200 - should update same ring
       currentRangeSubject.set(200);
       await helper.waitForUpdate();
       
-      // All 4 rings should be visible
-      const allRings = helper.querySelectorAllSVG('circle.range-ring');
-      const visibleRings = Array.from(allRings).filter(ring => {
-        const group = ring.parentElement;
-        if (!group || !(group instanceof HTMLElement)) {
-          return false;
-        }
-        return group.style.display !== 'none';
-      });
-      expect(visibleRings.length).toBe(4);
+      // Should be the same DOM element
+      const ringAfter = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
+      expect(ringAfter).toBe(ring);
+      
+      // Radius should have changed
+      const newRadius = parseFloat(ringAfter.getAttribute('r') || '0');
+      expect(newRadius).toBeCloseTo(40, 1); // 25/200 * 320 = 40
+      expect(newRadius).toBeLessThan(initialRadius);
     });
 
     test('should subscribe to observables and update DOM (MSFS pattern)', async () => {
@@ -566,21 +545,22 @@ describe('RangeRings Component', () => {
       });
       await helper.waitForUpdate();
 
-      // Get initial DOM elements
-      const ring50Initial = helper.querySelectorSVG('circle[data-range="50"]') as SVGCircleElement;
-      const initialRadius = parseFloat(ring50Initial.getAttribute('r') || '0');
+      // Get initial DOM element
+      const ringInitial = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
+      const initialRadius = parseFloat(ringInitial.getAttribute('r') || '0');
       
       // Change range - should update same DOM element via subscription
       currentRangeSubject.set(100);
       await helper.waitForUpdate();
       
       // Should be the same DOM element (not re-rendered)
-      const ring50After = helper.querySelectorSVG('circle[data-range="50"]') as SVGCircleElement;
-      expect(ring50After).toBe(ring50Initial); // Same element = no re-render
+      const ringAfter = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
+      expect(ringAfter).toBe(ringInitial); // Same element = no re-render
       
       // Radius should have changed (updated via subscription)
-      const newRadius = parseFloat(ring50After.getAttribute('r') || '0');
+      const newRadius = parseFloat(ringAfter.getAttribute('r') || '0');
       expect(newRadius).not.toBe(initialRadius);
+      expect(newRadius).toBeLessThan(initialRadius); // Smaller at 100 nmi
     });
   });
 });

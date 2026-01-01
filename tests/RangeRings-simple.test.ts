@@ -24,93 +24,72 @@ describe('RangeRings - Simple Ref Test', () => {
     env.teardown();
   });
 
-  test('refs should be populated after render', () => {
+  test('refs should be populated after render', async () => {
     const { component } = helper.renderComponent(RangeRings, {
       currentRange: currentRangeSubject,
       viewMode: viewModeSubject
     });
 
-    // Check if refs are populated
-    const ranges = [25, 50, 100, 200];
-    ranges.forEach(range => {
-      const ringRef = (component as any).ringRefs.get(range);
-      expect(ringRef).toBeTruthy();
-      expect(ringRef.circle.instance).toBeTruthy();
-      expect(ringRef.text.instance).toBeTruthy();
-      expect(ringRef.group.instance).toBeTruthy();
-    });
+    await helper.waitForUpdate(100);
+
+    // Component has individual refs: circleRef, arcRef, textRef, textBgRef
+    expect((component as any).circleRef).toBeTruthy();
+    expect((component as any).circleRef.instance).toBeTruthy();
+    expect((component as any).arcRef).toBeTruthy();
+    expect((component as any).arcRef.instance).toBeTruthy();
+    expect((component as any).textRef).toBeTruthy();
+    expect((component as any).textRef.instance).toBeTruthy();
+    expect((component as any).textBgRef).toBeTruthy();
+    expect((component as any).textBgRef.instance).toBeTruthy();
   });
 
-  test('updateRings should work when called manually', () => {
+  test('updateRings should work when called manually', async () => {
     const { component } = helper.renderComponent(RangeRings, {
       currentRange: currentRangeSubject,
       viewMode: viewModeSubject
     });
 
-    // Verify refs are populated
-    const ringRef25 = (component as any).ringRefs.get(25);
-    const ringRef100 = (component as any).ringRefs.get(100);
-    
-    expect(ringRef25.circle.instance).toBeTruthy();
-    expect(ringRef100.circle.instance).toBeTruthy();
-    
-    // Get the actual DOM elements that querySelector finds
-    const domRing25 = helper.querySelectorSVG('circle[data-range="25"]') as SVGCircleElement;
-    const domRing100 = helper.querySelectorSVG('circle[data-range="100"]') as SVGCircleElement;
-    
-    // Check if refs point to the same elements that querySelector finds
-    // If they don't match, that's the problem - refs point to original elements, not cloned ones
-    const ref25MatchesDOM = ringRef25.circle.instance === domRing25;
-    const ref100MatchesDOM = ringRef100.circle.instance === domRing100;
-    
-    // If refs don't match DOM, update them to point to the DOM elements
-    // This simulates what ref reconciliation should do
-    if (!ref25MatchesDOM && domRing25) {
-      ringRef25.circle.instance = domRing25;
-      const text25 = helper.querySelectorSVG('text[data-range="25"]') as SVGTextElement;
-      if (text25) ringRef25.text.instance = text25;
-      const group25 = domRing25.parentElement;
-      if (group25) ringRef25.group.instance = group25 as any;
-    }
-    if (!ref100MatchesDOM && domRing100) {
-      ringRef100.circle.instance = domRing100;
-      const text100 = helper.querySelectorSVG('text[data-range="100"]') as SVGTextElement;
-      if (text100) ringRef100.text.instance = text100;
-      const group100 = domRing100.parentElement;
-      if (group100) ringRef100.group.instance = group100 as any;
-    }
+    await helper.waitForUpdate(100);
 
+    // Verify refs are populated
+    const circleRef = (component as any).circleRef;
+    expect(circleRef.instance).toBeTruthy();
+    
+    // Get the actual DOM element
+    const domCircle = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
+    expect(domCircle).toBeTruthy();
+    
     // Manually call updateRings with range 100
     (component as any).updateRings(100);
 
-    // Check that rings have correct radii
-    const radius25 = parseFloat(domRing25.getAttribute('r') || '0');
-    const radius100 = parseFloat(domRing100.getAttribute('r') || '0');
-    
-    // At 100 nmi range: 25 nmi ring should be at 25% of display radius (45)
-    expect(radius25).toBeCloseTo(45, 1);
-    // 100 nmi ring should be at full display radius (180)
-    expect(radius100).toBeCloseTo(180, 1);
+    // Check that ring has correct radius
+    // At 100 nmi range: 25 nmi ring should be at 25% of display radius (80)
+    // DISPLAY_RADIUS is 320, so 25/100 * 320 = 80
+    const radius = parseFloat(domCircle.getAttribute('r') || '0');
+    expect(radius).toBeCloseTo(80, 1);
   });
 
-  test('updateRings should update styling correctly', () => {
+  test('updateRings should update ring radius correctly for different ranges', async () => {
     const { component } = helper.renderComponent(RangeRings, {
       currentRange: currentRangeSubject,
       viewMode: viewModeSubject
     });
 
-    // Manually call updateRings with range 50
-    (component as any).updateRings(50);
+    await helper.waitForUpdate(100);
 
-    // Check active ring (50) has active styling
-    const activeRing50 = helper.querySelectorSVG('circle[data-range="50"]') as SVGCircleElement;
-    expect(activeRing50.getAttribute('stroke')).toBe('#00FF00');
-    expect(activeRing50.getAttribute('stroke-width')).toBe('2');
+    const domCircle = helper.querySelectorSVG('circle.range-ring') as SVGCircleElement;
     
-    // Check inactive ring (25) has inactive styling
-    const inactiveRing25 = helper.querySelectorSVG('circle[data-range="25"]') as SVGCircleElement;
-    expect(inactiveRing25.getAttribute('stroke')).toBe('#006600');
-    expect(inactiveRing25.getAttribute('stroke-width')).toBe('1');
+    // Test at 50 nmi range
+    (component as any).updateRings(50);
+    let radius = parseFloat(domCircle.getAttribute('r') || '0');
+    // At 50 nmi range: 25 nmi ring should be at 50% of display radius (160)
+    expect(radius).toBeCloseTo(160, 1);
+    
+    // Test at 200 nmi range
+    (component as any).updateRings(200);
+    radius = parseFloat(domCircle.getAttribute('r') || '0');
+    // At 200 nmi range: 25 nmi ring should be at 12.5% of display radius (40)
+    expect(radius).toBeCloseTo(40, 1);
   });
 });
 
