@@ -75,7 +75,7 @@ function reconcileRefs(vnode: any, domNode: Node | null, rootContainer?: Element
       for (const child of children) {
         if (Array.isArray(child)) {
           result.push(...flattenChildren(child));
-        } else if (child !== null && child !== undefined) {
+        } else if (child !== null && child !== undefined && typeof child !== 'boolean') {
           result.push(child);
         }
       }
@@ -84,7 +84,7 @@ function reconcileRefs(vnode: any, domNode: Node | null, rootContainer?: Element
     
     const vnodeChildren = Array.isArray(vnode.children) 
       ? flattenChildren(vnode.children)
-      : [vnode.children].filter(c => c !== null && c !== undefined);
+      : [vnode.children].filter(c => c !== null && c !== undefined && typeof c !== 'boolean');
     
     if (vnodeChildren.length > 0) {
       // Get DOM children - we need both elements AND text nodes for accurate matching
@@ -103,6 +103,7 @@ function reconcileRefs(vnode: any, domNode: Node | null, rootContainer?: Element
       
       for (const childVNode of vnodeChildren) {
         if (!childVNode) continue;
+        if (typeof childVNode === 'boolean') continue;
 
         // Handle text VNodes (strings/numbers) - these don't have refs
         if (typeof childVNode === 'string' || typeof childVNode === 'number') {
@@ -295,17 +296,20 @@ export class ComponentTestHelper {
     // FSComponent.render() may modify the VNode tree in place, so we need to collect refs first
     const refsMap = new Map<any, any>();
     const collectRefs = (vnode: any): void => {
-      if (!vnode) return;
+      if (vnode === null || vnode === undefined) return;
+      // JSX conditionals can produce booleans (e.g. `cond && <El />`)
+      if (typeof vnode === 'boolean') return;
+      // Arrays from `.map()` should be traversed.
+      if (Array.isArray(vnode)) {
+        vnode.forEach(collectRefs);
+        return;
+      }
       if (vnode.props?.ref && typeof vnode.props.ref === 'object' && 'instance' in vnode.props.ref) {
         refsMap.set(vnode.props.ref, vnode);
       }
       if (vnode.children) {
         const children = Array.isArray(vnode.children) ? vnode.children : [vnode.children];
-        children.forEach((child: any) => {
-          if (child && typeof child === 'object') {
-            collectRefs(child);
-          }
-        });
+        children.forEach((child: any) => collectRefs(child));
       }
     };
     collectRefs(vnode); // Collect BEFORE FSComponent.render() modifies the tree
