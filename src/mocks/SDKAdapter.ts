@@ -437,8 +437,11 @@ export class Subject<T> {
 }
 
 // Mock Subscribable interface
+// Matches the real SDK: Subscribable extends Accessible which has get()
 export interface Subscribable<T> {
+  get(): T;
   sub(callback: (value: T) => void, immediate?: boolean): { destroy: () => void };
+  map?<M>(fn: (input: T, previousVal?: M) => M, equalityFunc?: ((a: M, b: M) => boolean)): Subscribable<M>;
 }
 
 // Mock EventBus
