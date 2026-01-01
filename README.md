@@ -2,17 +2,15 @@
 
 Unit testing framework for MSFS HTML/JS instruments (Jest + JSDOM).
 
-Фреймворк для unit-тестирования MSFS инструментов с поддержкой DOM через jsdom.
+## Features
 
-## Особенности
+- ✅ **Full DOM support** - uses jsdom for component rendering
+- ✅ **FSComponent.render()** - render components and test DOM elements
+- ✅ **SimVar and Coherent mocks** - complete simulator API emulation
+- ✅ **Jest integration** - ready-to-use testing utilities
+- ✅ **TypeScript support** - full type safety
 
-- ✅ **Полная поддержка DOM** - использует jsdom для рендеринга компонентов
-- ✅ **FSComponent.render()** - можно рендерить компоненты и тестировать DOM элементы
-- ✅ **Моки SimVar и Coherent** - полная эмуляция API симулятора
-- ✅ **Jest интеграция** - готовые утилиты для тестирования
-- ✅ **TypeScript поддержка** - полная типизация
-
-## Установка
+## Installation
 
 ### As a library (recommended)
 
@@ -27,12 +25,12 @@ npm install
 npm run build
 ```
 
-## Использование
+## Usage
 
-### Базовый пример
+### Basic Example
 
 ```typescript
-import { TestEnvironment, ComponentTestHelper } from './msfs-unit-test-framework';
+import { TestEnvironment, ComponentTestHelper } from '@avimate/msfs-jest-utils';
 import { MyComponent } from '../html_ui/MyComponent';
 
 describe('MyComponent', () => {
@@ -77,7 +75,7 @@ describe('MyComponent', () => {
 });
 ```
 
-### Тестирование DOM элементов
+### Testing DOM Elements
 
 ```typescript
 test('should have correct CSS classes', () => {
@@ -97,7 +95,7 @@ test('should apply styles correctly', () => {
 });
 ```
 
-### Работа с SimVar
+### Working with SimVar
 
 ```typescript
 test('should read SimVar values', () => {
@@ -121,49 +119,49 @@ test('should track SimVar access', () => {
 
 ### TestEnvironment
 
-- `setup()` - настройка тестового окружения
-- `teardown()` - очистка после тестов
-- `reset()` - сброс моков
-- `setSimVar(name, unit, value)` - установить SimVar
-- `getSimVar(name, unit)` - получить SimVar
-- `getDocument()` - получить jsdom document
-- `getWindow()` - получить jsdom window
+- `setup()` - initialize test environment
+- `teardown()` - cleanup after tests
+- `reset()` - reset mocks
+- `setSimVar(name, unit, value)` - set SimVar value
+- `getSimVar(name, unit)` - get SimVar value
+- `getDocument()` - get jsdom document
+- `getWindow()` - get jsdom window
 
 ### ComponentTestHelper
 
-- `renderComponent(ComponentClass, props)` - рендерить компонент
-- `querySelector(selector)` - найти элемент
-- `getTextContent(selector)` - получить текст
-- `hasClass(selector, className)` - проверить класс
-- `getAttribute(selector, attrName)` - получить атрибут
-- `getStyle(selector, property)` - получить стиль
-- `waitForUpdate(ms)` - подождать обновления
-- `cleanup()` - очистка
+- `renderComponent(ComponentClass, props)` - render component
+- `querySelector(selector)` - find element
+- `getTextContent(selector)` - get text content
+- `hasClass(selector, className)` - check class
+- `getAttribute(selector, attrName)` - get attribute
+- `getStyle(selector, property)` - get style
+- `waitForUpdate(ms)` - wait for update
+- `cleanup()` - cleanup
 
-## Структура
+## Structure
 
 ```
 msfs-unit-test-framework/
 ├── src/
 │   ├── mocks/
-│   │   ├── SimVarMock.ts      # Мок SimVar API
-│   │   ├── CoherentMock.ts     # Мок Coherent API
+│   │   ├── SimVarMock.ts      # SimVar API mock
+│   │   ├── CoherentMock.ts     # Coherent API mock
 │   │   └── index.ts
 │   ├── test-utils/
-│   │   ├── TestEnvironment.ts  # Настройка окружения
-│   │   ├── ComponentTestHelper.ts # Утилиты для компонентов
+│   │   ├── TestEnvironment.ts  # Environment setup
+│   │   ├── ComponentTestHelper.ts # Component utilities
 │   │   └── index.ts
 │   ├── setupTests.ts           # Jest setup
-│   └── index.ts                # Главный экспорт
-├── tests/                      # Примеры тестов
+│   └── index.ts                # Main export
+├── tests/                      # Test examples
 ├── jest.config.js
 ├── tsconfig.json
 └── package.json
 ```
 
-## Примеры
+## Examples
 
-Смотрите папку `tests/` для примеров использования.
+See the `tests/` folder for usage examples.
 
 
 
