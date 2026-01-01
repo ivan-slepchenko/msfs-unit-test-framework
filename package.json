@@ -4,6 +4,18 @@
   "description": "Unit testing framework for MSFS instruments with DOM support via jsdom",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./setupTests": "./dist/setupTests.js",
+    "./mocks/SDKAdapter": "./dist/mocks/SDKAdapter.js",
+    "./mocks/GarminSDKAdapter": "./dist/mocks/GarminSDKAdapter.js",
+    "./mocks/MSFSGlobals": "./dist/mocks/MSFSGlobals.js",
+    "./mocks/SimVarMock": "./dist/mocks/SimVarMock.js",
+    "./mocks/CoherentMock": "./dist/mocks/CoherentMock.js",
+    "./test-utils/ComponentTestHelper": "./dist/test-utils/ComponentTestHelper.js",
+    "./test-utils/TestEnvironment": "./dist/test-utils/TestEnvironment.js",
+    "./test-utils/ObservableTestHelper": "./dist/test-utils/ObservableTestHelper.js"
+  },
   "scripts": {
     "build": "tsc",
     "test": "jest",
@@ -19,9 +31,27 @@
   ],
   "author": "",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivan-slepchenko/msfs-unit-test-framework.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ivan-slepchenko/msfs-unit-test-framework/issues"
+  },
+  "homepage": "https://github.com/ivan-slepchenko/msfs-unit-test-framework#readme",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
+    "@microsoft/msfs-garminsdk": "^2.2.3",
     "@microsoft/msfs-sdk": "^2.2.3",
-    "@microsoft/msfs-types": "^1.14.6"
+    "@microsoft/msfs-types": "^1.14.6",
+    "storm-gauges": "file:.."
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
@@ -33,4 +63,3 @@
     "typescript": "^5.8.3"
   }
 }
-

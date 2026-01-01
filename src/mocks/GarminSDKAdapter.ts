@@ -5,7 +5,9 @@
  * Goal: exercise the unit-test framework, not re-implement Garmin SDK.
  */
 
-import { DisplayComponent, FSComponent, Subject } from '@microsoft/msfs-sdk';
+// IMPORTANT: This adapter is part of the test framework and should not depend on
+// the real SDK runtime/types. Import from our own SDKAdapter instead.
+import { DisplayComponent, FSComponent, Subject } from './SDKAdapter';
 
 // -----------------------------
 // Enums / constants
@@ -120,7 +122,7 @@ export interface WeatherRadarProps {
 }
 
 export class WeatherRadar extends DisplayComponent<WeatherRadarProps> {
-  public rootElement: HTMLElement | null = null;
+  public rootElement: any = null;
   public update = jest.fn();
   public wake = jest.fn();
   public sleep = jest.fn();

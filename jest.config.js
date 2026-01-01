@@ -21,13 +21,12 @@ module.exports = {
     '^@microsoft/msfs-sdk/(.*)$': path.resolve(__dirname, 'src/mocks/SDKAdapter.ts'),
     '^@microsoft/msfs-garminsdk$': path.resolve(__dirname, 'src/mocks/GarminSDKAdapter.ts'),
     '^@microsoft/msfs-garminsdk/(.*)$': path.resolve(__dirname, 'src/mocks/GarminSDKAdapter.ts'),
-    '^@microsoft/msfs-types$': path.resolve(__dirname, '../node_modules/@microsoft/msfs-types'),
+    '^@microsoft/msfs-types$': path.resolve(__dirname, 'node_modules/@microsoft/msfs-types'),
     // Map test framework imports
     '^@msfs/unit-test-framework$': '<rootDir>/src',
   },
   modulePaths: [
-    '<rootDir>/../node_modules', // Prefer root node_modules
-    '<rootDir>/node_modules',     // Fallback to local
+    '<rootDir>/node_modules',
   ],
   testPathIgnorePatterns: [
     '/node_modules/',

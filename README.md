@@ -1,5 +1,7 @@
 # MSFS Unit Test Framework
 
+Unit testing framework for MSFS HTML/JS instruments (Jest + JSDOM).
+
 Фреймворк для unit-тестирования MSFS инструментов с поддержкой DOM через jsdom.
 
 ## Особенности
@@ -12,8 +14,15 @@
 
 ## Установка
 
+### As a library (recommended)
+
 ```bash
-cd msfs-unit-test-framework
+npm install --save-dev @msfs/unit-test-framework
+```
+
+### Local development
+
+```bash
 npm install
 npm run build
 ```

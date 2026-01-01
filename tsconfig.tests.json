@@ -10,10 +10,10 @@
     "jsxFragmentFactory": "FSComponent.Fragment",
     "paths": {
       "@microsoft/msfs-sdk": ["src/mocks/SDKAdapter"],
-      "@microsoft/msfs-types": ["../node_modules/@microsoft/msfs-types"]
+      "@microsoft/msfs-types": ["node_modules/@microsoft/msfs-types"]
     }
   },
-  "include": ["tests/**/*", "src/**/*", "../html_ui/stormscope/**/*", "src/mocks/jsx.d.ts"],
+  "include": ["tests/**/*", "src/**/*", "src/mocks/jsx.d.ts"],
   "exclude": ["node_modules", "dist"]
 }
 
