@@ -177,7 +177,7 @@ describe('DischargePoints Component', () => {
         points,
         currentRange: 100,
         heading: headingSubject,
-        viewMode: 'forward'
+        viewMode: '120'
       });
 
       // In forward mode, only points in forward 120° arc should be visible

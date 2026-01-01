@@ -13,55 +13,30 @@ describe('DisplayModeManager', () => {
   });
 
   describe('Initialization', () => {
-    test('should initialize with default display mode STRIKE', () => {
-      expect(manager.getCurrentDisplayMode()).toBe('STRIKE');
-    });
-
     test('should initialize with default view mode 360', () => {
       expect(manager.getCurrentViewMode()).toBe('360');
     });
 
-    test('should initialize with specified modes', () => {
-      const customManager = new DisplayModeManager('CELL', 'forward');
-      expect(customManager.getCurrentDisplayMode()).toBe('CELL');
-      expect(customManager.getCurrentViewMode()).toBe('forward');
-    });
-  });
-
-  describe('Display Mode', () => {
-    test('should toggle display mode between STRIKE and CELL', () => {
-      expect(manager.getCurrentDisplayMode()).toBe('STRIKE');
-      
-      manager.toggleDisplayMode();
-      expect(manager.getCurrentDisplayMode()).toBe('CELL');
-      
-      manager.toggleDisplayMode();
-      expect(manager.getCurrentDisplayMode()).toBe('STRIKE');
-    });
-
-    test('should set specific display mode', () => {
-      manager.setDisplayMode('CELL');
-      expect(manager.getCurrentDisplayMode()).toBe('CELL');
-      
-      manager.setDisplayMode('STRIKE');
-      expect(manager.getCurrentDisplayMode()).toBe('STRIKE');
+    test('should initialize with specified view mode', () => {
+      const customManager = new DisplayModeManager('120');
+      expect(customManager.getCurrentViewMode()).toBe('120');
     });
   });
 
   describe('View Mode', () => {
-    test('should toggle view mode between 360 and forward', () => {
+    test('should toggle view mode between 360 and 120', () => {
       expect(manager.getCurrentViewMode()).toBe('360');
       
       manager.toggleViewMode();
-      expect(manager.getCurrentViewMode()).toBe('forward');
+      expect(manager.getCurrentViewMode()).toBe('120');
       
       manager.toggleViewMode();
       expect(manager.getCurrentViewMode()).toBe('360');
     });
 
     test('should set specific view mode', () => {
-      manager.setViewMode('forward');
-      expect(manager.getCurrentViewMode()).toBe('forward');
+      manager.setViewMode('120');
+      expect(manager.getCurrentViewMode()).toBe('120');
       
       manager.setViewMode('360');
       expect(manager.getCurrentViewMode()).toBe('360');
@@ -69,21 +44,6 @@ describe('DisplayModeManager', () => {
   });
 
   describe('Observable Updates', () => {
-    test('should emit updates when display mode changes', async () => {
-      const initialMode = manager.getCurrentDisplayMode();
-      
-      manager.toggleDisplayMode();
-      
-      const newMode = await ObservableTestHelper.waitForValue(
-        manager.displayMode,
-        (mode) => mode !== initialMode,
-        1000
-      );
-      
-      expect(newMode).not.toBe(initialMode);
-      expect(['STRIKE', 'CELL']).toContain(newMode);
-    });
-
     test('should emit updates when view mode changes', async () => {
       const initialMode = manager.getCurrentViewMode();
       
@@ -96,8 +56,7 @@ describe('DisplayModeManager', () => {
       );
       
       expect(newMode).not.toBe(initialMode);
-      expect(['360', 'forward']).toContain(newMode);
+      expect(['360', '120']).toContain(newMode);
     });
   });
 });
-

@@ -11,7 +11,7 @@ describe('Debug Refs', () => {
     env.setup();
     const helper = new ComponentTestHelper(env);
     const currentRangeSubject = Subject.create<number>(100);
-    const viewModeSubject = Subject.create<'forward' | '360'>('360');
+    const viewModeSubject = Subject.create<'120' | '360'>('360');
 
     const { component, element, vnode } = helper.renderComponent(RangeRings, {
       currentRange: currentRangeSubject,

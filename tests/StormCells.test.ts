@@ -201,7 +201,7 @@ describe('StormCells Component', () => {
         cells,
         currentRange: 100,
         heading: headingSubject,
-        viewMode: 'forward'
+        viewMode: '120'
       });
 
       // In forward mode, only cells in forward 120° arc should be visible

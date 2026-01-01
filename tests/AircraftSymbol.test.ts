@@ -1,15 +1,18 @@
 import { TestEnvironment, ComponentTestHelper } from '../src';
+import { Subject } from '@microsoft/msfs-sdk';
 // @ts-ignore - Type conflict between SDK versions, but runtime is fine
 import { AircraftSymbol, AircraftSymbolProps } from '../../html_ui/stormscope/components/AircraftSymbol';
 
 describe('AircraftSymbol Component', () => {
   let env: TestEnvironment;
   let helper: ComponentTestHelper;
+  let viewModeSubject: Subject<'120' | '360'>;
 
   beforeEach(() => {
     env = new TestEnvironment();
     env.setup();
     helper = new ComponentTestHelper(env);
+    viewModeSubject = Subject.create<'120' | '360'>('360');
   });
 
   afterEach(() => {
@@ -19,7 +22,9 @@ describe('AircraftSymbol Component', () => {
 
   describe('Rendering', () => {
     test('should render aircraft symbol container', () => {
-      const { element } = helper.renderComponent(AircraftSymbol, {});
+      const { element } = helper.renderComponent(AircraftSymbol, {
+        viewMode: viewModeSubject
+      });
 
       expect(element).toBeTruthy();
       expect(element.tagName).toBe('g');
@@ -27,14 +32,18 @@ describe('AircraftSymbol Component', () => {
     });
 
     test('should render horizontal and vertical lines', () => {
-      helper.renderComponent(AircraftSymbol, {});
+      helper.renderComponent(AircraftSymbol, {
+        viewMode: viewModeSubject
+      });
 
       const lines = helper.querySelectorAllSVG('line.aircraft-line');
       expect(lines.length).toBe(2);
     });
 
     test('should render center circle', () => {
-      helper.renderComponent(AircraftSymbol, {});
+      helper.renderComponent(AircraftSymbol, {
+        viewMode: viewModeSubject
+      });
 
       const circle = helper.querySelectorSVG('circle.aircraft-center');
       expect(circle).toBeTruthy();
@@ -44,7 +53,9 @@ describe('AircraftSymbol Component', () => {
 
   describe('Positioning', () => {
     test('should be centered at (200, 200)', () => {
-      helper.renderComponent(AircraftSymbol, {});
+      helper.renderComponent(AircraftSymbol, {
+        viewMode: viewModeSubject
+      });
 
       const symbol = helper.querySelectorSVG('#aircraft-symbol');
       expect(symbol).toBeTruthy();
@@ -54,7 +65,9 @@ describe('AircraftSymbol Component', () => {
     });
 
     test('should have correct line positions', () => {
-      helper.renderComponent(AircraftSymbol, {});
+      helper.renderComponent(AircraftSymbol, {
+        viewMode: viewModeSubject
+      });
 
       const lines = helper.querySelectorAllSVG('line.aircraft-line');
       expect(lines.length).toBe(2);
@@ -81,7 +94,9 @@ describe('AircraftSymbol Component', () => {
 
   describe('Styling', () => {
     test('should apply correct stroke color', () => {
-      helper.renderComponent(AircraftSymbol, {});
+      helper.renderComponent(AircraftSymbol, {
+        viewMode: viewModeSubject
+      });
 
       const lines = helper.querySelectorAllSVG('line.aircraft-line');
       lines.forEach(line => {
@@ -91,7 +106,9 @@ describe('AircraftSymbol Component', () => {
     });
 
     test('should apply correct fill color to circle', () => {
-      helper.renderComponent(AircraftSymbol, {});
+      helper.renderComponent(AircraftSymbol, {
+        viewMode: viewModeSubject
+      });
 
       const circle = helper.querySelectorSVG('circle.aircraft-center');
       expect(circle?.getAttribute('fill')).toBe('#00FF00');

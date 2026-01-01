@@ -10,15 +10,40 @@ import { DefaultCloudDataProvider } from '../../html_ui/stormscope/providers/Clo
 // @ts-ignore
 import { CloudType, CloudMap, CloudSegment } from '../../html_ui/stormscope/types/CloudData';
 
+// Mock StormScopeMapManager for testing
+class MockStormScopeMapManager {
+  private mapReadyValue = true;
+  
+  isMapReady(): boolean {
+    return this.mapReadyValue;
+  }
+  
+  readNexradPixel(latitude: number, longitude: number): number {
+    // Return mock NEXRAD intensity (0-1)
+    return 0.5; // Default moderate intensity
+  }
+  
+  setMapReady(ready: boolean): void {
+    this.mapReadyValue = ready;
+  }
+  
+  setNexradIntensity(intensity: number): void {
+    // For testing, we can override the intensity
+    // This is a simple mock - in real tests you might want more control
+  }
+}
+
 describe('DefaultCloudDataProvider', () => {
   let env: TestEnvironment;
   let bus: EventBus;
   let provider: DefaultCloudDataProvider;
+  let mockMapManager: MockStormScopeMapManager;
 
   beforeEach(() => {
     env = new TestEnvironment();
     env.setup();
     bus = new EventBus();
+    mockMapManager = new MockStormScopeMapManager();
     simVarMock.reset();
     
     // Set up default aircraft position
@@ -47,12 +72,12 @@ describe('DefaultCloudDataProvider', () => {
 
   describe('Initialization', () => {
     test('should initialize successfully', () => {
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       expect(() => provider.init()).not.toThrow();
     });
 
     test('should not initialize twice', async () => {
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       const initialMap = await ObservableTestHelper.waitForValue(
         provider.cloudMap,
@@ -70,7 +95,7 @@ describe('DefaultCloudDataProvider', () => {
     });
 
     test('should create cloud map on init', async () => {
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       // Wait for initial update
@@ -88,7 +113,7 @@ describe('DefaultCloudDataProvider', () => {
 
   describe('Configuration', () => {
     test('should use default configuration', async () => {
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       const cloudMap = await ObservableTestHelper.waitForValue(
@@ -101,7 +126,7 @@ describe('DefaultCloudDataProvider', () => {
     });
 
     test('should use custom configuration', async () => {
-      provider = new DefaultCloudDataProvider(bus, {
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any, {
         updateInterval: 1000,
         gridSize: 10,
         defaultRange: 50,
@@ -122,7 +147,7 @@ describe('DefaultCloudDataProvider', () => {
 
   describe('Pause and Resume', () => {
     test('should pause updates', async () => {
-      provider = new DefaultCloudDataProvider(bus, { updateInterval: 100 });
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any, { updateInterval: 100 });
       provider.init();
       
       const initialMap = await ObservableTestHelper.waitForValue(
@@ -148,7 +173,7 @@ describe('DefaultCloudDataProvider', () => {
     });
 
     test('should resume updates', async () => {
-      provider = new DefaultCloudDataProvider(bus, { updateInterval: 100 });
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any, { updateInterval: 100 });
       provider.init();
       
       const initialMap = await ObservableTestHelper.waitForValue(
@@ -179,7 +204,7 @@ describe('DefaultCloudDataProvider', () => {
 
   describe('Cloud Map Generation', () => {
     test('should generate correct number of segments', async () => {
-      provider = new DefaultCloudDataProvider(bus, { gridSize: 10 });
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any, { gridSize: 10 });
       provider.init();
       
       const cloudMap = await ObservableTestHelper.waitForValue(
@@ -198,7 +223,7 @@ describe('DefaultCloudDataProvider', () => {
       simVarMock.setSimVarValue('PLANE LATITUDE', 'degrees', testLat);
       simVarMock.setSimVarValue('PLANE LONGITUDE', 'degrees', testLon);
       
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       const cloudMap = await ObservableTestHelper.waitForValue(
@@ -212,7 +237,7 @@ describe('DefaultCloudDataProvider', () => {
     });
 
     test('should update cloud map periodically', async () => {
-      provider = new DefaultCloudDataProvider(bus, { updateInterval: 50 }); // Faster for testing
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any, { updateInterval: 50 }); // Faster for testing
       provider.init();
       provider.resume(); // Resume to start periodic updates
       
@@ -250,7 +275,7 @@ describe('DefaultCloudDataProvider', () => {
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 1 BASE HEIGHT', 'feet', 0);
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 1 TOP HEIGHT', 'feet', 0);
       
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       const cloudMap = await ObservableTestHelper.waitForValue(
@@ -268,7 +293,7 @@ describe('DefaultCloudDataProvider', () => {
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 1 BASE HEIGHT', 'feet', 3000);
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 1 TOP HEIGHT', 'feet', 5000);
       
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       const cloudMap = await ObservableTestHelper.waitForValue(
@@ -286,7 +311,7 @@ describe('DefaultCloudDataProvider', () => {
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 1 BASE HEIGHT', 'feet', 10000);
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 1 TOP HEIGHT', 'feet', 15000);
       
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       const cloudMap = await ObservableTestHelper.waitForValue(
@@ -304,7 +329,7 @@ describe('DefaultCloudDataProvider', () => {
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 1 BASE HEIGHT', 'feet', 22000);
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 1 TOP HEIGHT', 'feet', 24000);
       
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       const cloudMap = await ObservableTestHelper.waitForValue(
@@ -322,7 +347,7 @@ describe('DefaultCloudDataProvider', () => {
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 1 BASE HEIGHT', 'feet', 20000);
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 1 TOP HEIGHT', 'feet', 30000);
       
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       const cloudMap = await ObservableTestHelper.waitForValue(
@@ -345,7 +370,7 @@ describe('DefaultCloudDataProvider', () => {
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 3 BASE HEIGHT', 'feet', 20000);
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 3 TOP HEIGHT', 'feet', 30000);
       
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       const cloudMap = await ObservableTestHelper.waitForValue(
@@ -366,7 +391,7 @@ describe('DefaultCloudDataProvider', () => {
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 1 TOP HEIGHT', 'feet', 0);
       simVarMock.setSimVarValue('AMBIENT PRECIP RATE', 'number', 0);
       
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       const cloudMap = await ObservableTestHelper.waitForValue(
@@ -385,7 +410,7 @@ describe('DefaultCloudDataProvider', () => {
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 1 TOP HEIGHT', 'feet', 25000);
       simVarMock.setSimVarValue('AMBIENT PRECIP RATE', 'number', 0);
       
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       const cloudMap1 = await ObservableTestHelper.waitForValue(
@@ -428,7 +453,7 @@ describe('DefaultCloudDataProvider', () => {
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 1 TOP HEIGHT', 'feet', 30000);
       simVarMock.setSimVarValue('AMBIENT PRECIP RATE', 'number', 0);
       
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       const cloudMap1 = await ObservableTestHelper.waitForValue(
@@ -470,7 +495,7 @@ describe('DefaultCloudDataProvider', () => {
       simVarMock.setSimVarValue('AMBIENT CLOUD LAYER 1 TOP HEIGHT', 'feet', 50000);
       simVarMock.setSimVarValue('AMBIENT PRECIP RATE', 'number', 100);
       
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       const cloudMap = await ObservableTestHelper.waitForValue(
@@ -487,7 +512,7 @@ describe('DefaultCloudDataProvider', () => {
 
   describe('Cloud Segment Properties', () => {
     test('should set correct segment coordinates', async () => {
-      provider = new DefaultCloudDataProvider(bus, { gridSize: 2 });
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any, { gridSize: 2 });
       provider.init();
       
       const cloudMap = await ObservableTestHelper.waitForValue(
@@ -508,7 +533,7 @@ describe('DefaultCloudDataProvider', () => {
     });
 
     test('should include all required segment properties', async () => {
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       const cloudMap = await ObservableTestHelper.waitForValue(
@@ -533,7 +558,7 @@ describe('DefaultCloudDataProvider', () => {
 
   describe('Destroy', () => {
     test('should clean up on destroy', async () => {
-      provider = new DefaultCloudDataProvider(bus);
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any);
       provider.init();
       
       expect(() => provider.destroy()).not.toThrow();
@@ -548,7 +573,7 @@ describe('DefaultCloudDataProvider', () => {
     });
 
     test('should stop updates after destroy', async () => {
-      provider = new DefaultCloudDataProvider(bus, { updateInterval: 100 });
+      provider = new DefaultCloudDataProvider(bus, mockMapManager as any, { updateInterval: 100 });
       provider.init();
       
       const initialMap = await ObservableTestHelper.waitForValue(

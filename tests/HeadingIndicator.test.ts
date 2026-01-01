@@ -7,14 +7,14 @@ describe('HeadingIndicator Component', () => {
   let env: TestEnvironment;
   let helper: ComponentTestHelper;
   let headingSubject: Subject<number>;
-  let viewModeSubject: Subject<'forward' | '360'>;
+  let viewModeSubject: Subject<'120' | '360'>;
 
   beforeEach(() => {
     env = new TestEnvironment();
     env.setup();
     helper = new ComponentTestHelper(env);
     headingSubject = Subject.create<number>(0);
-    viewModeSubject = Subject.create<'forward' | '360'>('360');
+    viewModeSubject = Subject.create<'120' | '360'>('360');
   });
 
   afterEach(() => {
@@ -85,7 +85,7 @@ describe('HeadingIndicator Component', () => {
     });
 
     test('should be hidden in forward mode', async () => {
-      viewModeSubject.set('forward');
+      viewModeSubject.set('120');
       
       helper.renderComponent(HeadingIndicator, {
         heading: headingSubject,
@@ -114,7 +114,7 @@ describe('HeadingIndicator Component', () => {
       expect(indicator?.style.display).not.toBe('none');
 
       // Change to forward mode
-      viewModeSubject.set('forward');
+      viewModeSubject.set('120');
       await helper.waitForUpdate(50);
       
       indicator = helper.querySelectorSVG('#heading-indicator');
@@ -195,7 +195,7 @@ describe('HeadingIndicator Component', () => {
 
       // Change values
       headingSubject.set(180);
-      viewModeSubject.set('forward');
+      viewModeSubject.set('120');
 
       // Destroy component
       component.destroy();

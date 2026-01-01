@@ -9,14 +9,14 @@ describe('RangeRings - Simple Ref Test', () => {
   let env: TestEnvironment;
   let helper: ComponentTestHelper;
   let currentRangeSubject: Subject<number>;
-  let viewModeSubject: Subject<'forward' | '360'>;
+  let viewModeSubject: Subject<'120' | '360'>;
 
   beforeEach(() => {
     env = new TestEnvironment();
     env.setup();
     helper = new ComponentTestHelper(env);
     currentRangeSubject = Subject.create<number>(100);
-    viewModeSubject = Subject.create<'forward' | '360'>('360');
+    viewModeSubject = Subject.create<'120' | '360'>('360');
   });
 
   afterEach(() => {

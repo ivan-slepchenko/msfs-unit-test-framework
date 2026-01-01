@@ -17,7 +17,7 @@ describe('RangeRings Component', () => {
   let env: TestEnvironment;
   let helper: ComponentTestHelper;
   let currentRangeSubject: Subject<number>;
-  let viewModeSubject: Subject<'forward' | '360'>;
+  let viewModeSubject: Subject<'120' | '360'>;
 
   // Helper to get only visible rings (filters out rings with parent display: none)
   const getVisibleRings = () => {
@@ -47,7 +47,7 @@ describe('RangeRings Component', () => {
     env.setup();
     helper = new ComponentTestHelper(env);
     currentRangeSubject = Subject.create<number>(100);
-    viewModeSubject = Subject.create<'forward' | '360'>('360');
+    viewModeSubject = Subject.create<'120' | '360'>('360');
   });
 
   // Helper to render component and wait for initial observable subscription
@@ -322,7 +322,7 @@ describe('RangeRings Component', () => {
 
   describe('View Mode', () => {
     test('should render rings in forward view mode', async () => {
-      viewModeSubject.set('forward');
+      viewModeSubject.set('120');
       const { element } = await renderAndWait({
         currentRange: currentRangeSubject,
         viewMode: viewModeSubject
@@ -493,7 +493,7 @@ describe('RangeRings Component', () => {
       });
 
       // Rings should be visible in both modes
-      viewModeSubject.set('forward');
+      viewModeSubject.set('120');
       await helper.waitForUpdate();
       
       const ringsForward = helper.querySelectorAllSVG('circle.range-ring');

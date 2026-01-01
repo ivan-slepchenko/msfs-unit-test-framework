@@ -88,3 +88,31 @@ if (typeof globalObj.Coherent === 'undefined') {
     off: (eventName: string, callback: (data: any) => void) => coherentMock.off(eventName, callback),
   };
 }
+
+// Setup fetch mock (for agent logging in production code)
+if (typeof globalObj.fetch === 'undefined') {
+  globalObj.fetch = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    // Mock fetch - just return a successful response
+    // This prevents errors when code tries to log to agent endpoints
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: new Headers(),
+      url: typeof url === 'string' ? url : url.toString(),
+      redirected: false,
+      type: 'default' as ResponseType,
+      body: null,
+      bodyUsed: false,
+      clone: () => {
+        throw new Error('Not implemented');
+      },
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+      blob: () => Promise.resolve(new Blob()),
+      formData: () => Promise.resolve(new FormData()),
+      json: () => Promise.resolve({}),
+      text: () => Promise.resolve(''),
+      bytes: () => Promise.resolve(new Uint8Array(0)),
+    } as unknown as Response);
+  };
+}
